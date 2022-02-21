@@ -236,14 +236,14 @@ namespace my {
      */
     template<typename MutableBufferSequence,
         asio::completion_token_for <async_rw_handler>
-        CompletionToken = typename asio::default_completion_token<asio::io_context>::type>
+        CompletionToken = typename asio::default_completion_token<Executor>::type>
     requires asio::is_mutable_buffer_sequence<MutableBufferSequence>::value
     auto async_read_some(const MutableBufferSequence &buffer,
                          CompletionToken &&token = typename asio::default_completion_token<Executor>::type()) {
       // the async_initiate function takes a lambda that receives a completion_handler to invoke to indicate the completion of the asynchronous operation
       // The lambda will be called in the same execution_context as the async_read_some function.
       // async_initiate directly calls the lambda we passed to it.
-      // Therefore, it is OK for use to capture by reference.
+      // Therefore, it is OK for us to capture by reference.
       return asio::async_initiate<CompletionToken, async_rw_handler>([&](auto completion_handler) {
         // If you get an error on the following line it means that your handler
         // does not meet the documented type requirements for a ReadHandler.
@@ -278,7 +278,7 @@ namespace my {
           std::osyncstream(std::cout) << "T" << std::hash < std::thread::id > {}(std::this_thread::get_id())
                                       << " read performing read" << std::endl;
 
-          // The rest is smooth sailing. Get the iterators from the buffer and perform the acutal read.
+          // The rest is smooth sailing. Get the iterators from the buffer and perform the actual read.
           auto buf_begin = asio::buffers_begin(buffer);
           auto buf_end = asio::buffers_end(buffer);
           boost::system::error_code err = asio::error::fault; // set a general failure just in case
@@ -306,7 +306,7 @@ namespace my {
             head++;
             it++;
           }
-          // Hurray the read completed successfully
+          // Hurray! The read completed successfully
           err = asio::error::eof;
           completion:
           // Observe how the execution_context changes between the next two log statements
