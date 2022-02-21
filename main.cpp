@@ -8,7 +8,7 @@
 using namespace my;
 
 /**
- * This is the acutal main application loop.
+ * This is the actual main application loop.
  * It uses a new c++20 coroutine.
  */
 boost::asio::awaitable<void> mainCo(asio::io_context &appIO, Producer & prod) {
@@ -17,14 +17,21 @@ boost::asio::awaitable<void> mainCo(asio::io_context &appIO, Producer & prod) {
     // Instead, the appIO may be used directly.
     auto appStrand = asio::io_context::strand{appIO};
 
-    // Create a read stream from our
-    auto readStream = MyAsyncReadStream(appStrand, prod, 0, 99);
+    // Create a read stream from our producer
+    auto readStream = MyAsyncReadStream(appStrand, prod, 0, 10);
     std::vector<std::byte> dataBackend;
-    std::osyncstream(std::cout) << "BRD: " << std::hash<std::thread::id>{}(std::this_thread::get_id()) << std::endl;
     auto dynBuffer = asio::dynamic_buffer(dataBackend, 50);
-    auto [ec, n] = co_await asio::async_read(readStream, dynBuffer, asio::experimental::as_single(asio::use_awaitable)); // WARNING after co_await calls your execution_context might have changed
-    std::osyncstream(std::cout) << "RD: " << std::hash<std::thread::id>{}(std::this_thread::get_id()) << " "
-                                << ec.message() << " " << n << std::endl;
+    auto [ec, n] = co_await asio::async_read(readStream, dynBuffer, asio::experimental::as_single(asio::use_awaitable));
+    // WARNING after co_await calls your execution_context might have changed
+    // that's why the MyAsyncReadStream takes an executor as an argument in its constructor to ensure that the
+    // execution_context doesn't change accidentally
+
+    std::osyncstream(std::cout) << "T" << std::hash<std::thread::id>{}(std::this_thread::get_id())
+                                << " Read done: Bytes: "
+                                << n
+                                << " ec: "
+                                << ec.message()
+                                << std::endl;
   } catch (std::exception &e) {
     std::printf("echo Exception: %s\n", e.what());
   }
