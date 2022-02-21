@@ -262,7 +262,7 @@ namespace my {
         if (impl == nullptr) {
           // Do not directly invoke the completion_handler
           // According to the specification the completion_handler MUST NOT be invoked in the async_read_some function.
-          asio::post(this->executor, [completion_handler = std::forward<CompletionToken>(completion_handler)]() {
+          asio::post(this->executor, [completion_handler = std::forward<CompletionToken>(completion_handler)]() mutable {
             std::osyncstream(std::cout) << "T" << std::hash < std::thread::id > {}(std::this_thread::get_id())
                                         << " read bad_descriptor" << std::endl;
             completion_handler(asio::error::bad_descriptor, 0);
