@@ -7,9 +7,17 @@
 
 using namespace my;
 
+/**
+ * This is the acutal main application loop.
+ * It uses a new c++20 coroutine.
+ */
 boost::asio::awaitable<void> mainCo(asio::io_context &appIO, Producer & prod) {
   try {
+    // create strand to use for async operations (might not actually be needed due to the nature of coroutines.)
+    // Instead, the appIO may be used directly.
     auto appStrand = asio::io_context::strand{appIO};
+
+    // Create a read stream from our
     auto readStream = MyAsyncReadStream(appStrand, prod, 0, 99);
     std::vector<std::byte> dataBackend;
     std::osyncstream(std::cout) << "BRD: " << std::hash<std::thread::id>{}(std::this_thread::get_id()) << std::endl;

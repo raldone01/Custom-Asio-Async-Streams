@@ -8,19 +8,20 @@
 #include <boost/asio.hpp>
 
 namespace my {
-  namespace asio = boost::asio;
-
   namespace {
+    namespace asio = boost::asio;
+  }
+  namespace detail {
     /**
      * This class represents the actual service producing the data that may be read asynchronously.
      */
-    class ProducerImpl : std::enable_shared_from_this<ProducerImpl> {
+    class ProducerImpl : public std::enable_shared_from_this<ProducerImpl> {
       // The public fields of this class are only visible to the Producer class and the AsyncXXXXXStream classes.
     public:
       /**
        * The data that the Producer produces.
        */
-      std::string producedData = std::move(std::string(2048, 'a'));
+      std::string producedData = std::move(std::string(4, 'a'));
       /**
        * The strand used to avoid concurrent execution if the passed io context is run by multiple threads.
        */
@@ -61,13 +62,7 @@ namespace my {
         return result;
       }
 
-      /**
-       * Performs an expensive operation using the io context passed to the producer in the constructor.
-       */
-      void veryExpensiveOperation() {
-        // Important: acquire a strong reference to this object
-        auto captured_self = shared_from_this();
-        ops++;
+      void produce() {
         // replace a random char in the string
         producedData[gen() % producedData.size()] = charset[gen() % (sizeof(charset)/sizeof(charset[0]))];
         std::osyncstream(std::cout) << "T" << std::hash<std::thread::id>{}(std::this_thread::get_id())
@@ -76,6 +71,17 @@ namespace my {
                                     << " Data: "
                                     << producedData
                                     << std::endl;
+        // also append a random string
+        producedData += gen_string(5, gen);
+      }
+
+      /**
+       * Performs an expensive operation using the io context passed to the producer in the constructor.
+       * @param captured_self Important: store a strong reference to this object
+       */
+      void veryExpensiveOperation(std::shared_ptr<ProducerImpl> captured_self) {
+        ops++;
+        produce();
         if (ops < MAX_MODS) {
           // schedule another operation
           timer.expires_after(std::chrono::milliseconds(1000));
@@ -83,11 +89,7 @@ namespace my {
           // Important: bind the executor to the strand to avoid concurrent modification/reading of the producedData
           timer.async_wait(asio::bind_executor(strand, [this, captured_self = std::move(captured_self)](auto ec) {
             // when the timer runs out invoke the next modification
-            veryExpensiveOperation();
-            // the captured_self of the lambda goes out of scope here but
-            // that's not an issue as the first thing the veryExpensiveOperation does is acquire a strong reference
-            // NOTE: If this is running without delay and without a timer using just asio::defer you might want to
-            // move the captured_self as an argument to veryExpensiveOperation as an optimization.
+            veryExpensiveOperation(captured_self);
           }));
         }
       }
@@ -97,20 +99,10 @@ namespace my {
        * This function does the same but allows the operation chain to be interrupted by the user by discarding the last Producer reference.
        */
       void veryExpensiveOperationAllowEarlyExit() {
-        // Important: acquire a strong reference to this object
         auto captured_self = weak_from_this();
         if (auto strong_self = captured_self.lock()) {
           ops++;
-          // replace a random char in the string
-          producedData[gen() % producedData.size()] = charset[gen() % (sizeof(charset) / sizeof(charset[0]))];
-          // also append a random string
-          producedData += gen_string(5, gen);
-          std::osyncstream(std::cout) << "T" << std::hash<std::thread::id>{}(std::this_thread::get_id())
-                                      << " Produced "
-                                      << ops
-                                      << " Data: "
-                                      << producedData
-                                      << std::endl;
+          produce();
           if (ops < MAX_MODS) {
             // schedule another operation
             timer.expires_after(std::chrono::milliseconds(1000));
@@ -121,21 +113,21 @@ namespace my {
               if (auto self = captured_self.lock()) {
                 self->veryExpensiveOperationAllowEarlyExit();
               }
-              // the captured_self of the lambda goes out of scope here but
-              // that's not an issue as the first thing the veryExpensiveOperation does is acquire a strong reference
-              // NOTE: If this is running without delay and without a timer using just asio::defer you might want to
-              // move the captured_self as an argument to veryExpensiveOperation as an optimization.
             }));
           }
         }
       }
 
     public:
-      ProducerImpl(asio::io_context &io) : strand{io}, timer{io} {
-        asio::post(strand, [this] {
+      explicit ProducerImpl(asio::io_context &io) : strand{io}, timer{io} {}
+      /**
+       * Do not invoke twice.
+       */
+      void startOps() {
+        asio::post(strand, [this, captured_self = shared_from_this()] {
           // Choose if the operations may be stopped prematurely by the user.
           // veryExpensiveOperationAllowEarlyExit();
-          veryExpensiveOperation();
+          veryExpensiveOperation(captured_self);
         });
       }
 
@@ -151,6 +143,8 @@ namespace my {
     };
   }
 
+  using namespace detail;
+
   /**
    * This class is used by the user to indirectly interact with the ProducerImpl.
    */
@@ -163,11 +157,13 @@ namespace my {
 
     std::shared_ptr <ProducerImpl> impl;
   public:
-    Producer(asio::io_context &io) : impl{std::move(std::make_shared<ProducerImpl>(io))} {}
+    explicit Producer(asio::io_context &io) : impl{std::make_shared<ProducerImpl>(io)} {
+      impl->startOps();
+    }
 
     ~Producer() {
       // ensure the impl destructor is only called on the correct strand.
-      auto fut = asio::post(impl->strand, std::packaged_task<void()>([impl = std::move(impl)]() {}));
+      auto fut = asio::post(impl->strand, std::packaged_task<void()>([impl = this->impl]() {}));
       // uncomment the following line to make the destructor synchron
       // fut.wait();
       std::osyncstream(std::cout) << "T" << std::hash<std::thread::id>{}(std::this_thread::get_id())
@@ -275,7 +271,7 @@ namespace my {
         // Post work to the strand of the ProducerImpl and perform the read.
         // This avoids concurrent access to the read data.
         // NOTE: Do not capture the completion_handler by reference! It is fine to capture the buffer and this by reference though since the user must ensure the streams and the buffers lifetimes.
-        asio::post(impl->strand, [this, &buffer, impl = std::move(impl),
+        asio::post(impl->strand, [this, &buffer, impl,
                                   resultWorkGuard = std::move(resultWorkGuard),
                                   completion_handler = std::forward<CompletionToken>(completion_handler)]() mutable {
           // We made it to the ProducerImpls execution_context! Yay
