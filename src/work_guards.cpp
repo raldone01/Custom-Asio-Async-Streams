@@ -16,11 +16,11 @@ int main() {
   {
     // ensure the worker io context stands by until work is posted at a later time
     // one of the below is needed for the worker to execute work which one should I use?
-    // auto prodWork = asio::make_work_guard(workerIO);
+    auto prodWork = asio::make_work_guard(workerIO);
     // prodWork.reset(); // can be cleared
     // asio::any_io_executor prodWork2 = asio::prefer(workerIO.get_executor(), asio::execution::outstanding_work_t::tracked);
     // prodWork2 = asio::any_io_executor{}; // can be cleared
-    asio::any_io_executor prodWork3 = asio::require(workerIO.get_executor(), asio::execution::outstanding_work_t::tracked);
+    // asio::any_io_executor prodWork3 = asio::require(workerIO.get_executor(), asio::execution::outstanding_work_t::tracked);
     // prodWork3 = asio::any_io_executor{}; // can be cleared
 
     workerThread = boost::thread{[&workerIO] {
