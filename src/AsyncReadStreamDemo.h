@@ -173,6 +173,7 @@ namespace my {
 
   /**
    * Stream specifications https://www.boost.org/doc/libs/1_78_0/libs/beast/doc/html/beast/concepts/streams.html
+   * NOTE: It is possible to make it a bidirectional stream by adding an async_write_some function.
    * @tparam Executor The executor used to call the handlers of the AsyncStream.
    */
   template<typename Executor> requires asio::is_executor<Executor>::value
@@ -231,7 +232,7 @@ namespace my {
      * This function implements the whole AsyncReadStream.
      * What a horrible template mess!
      * @param buffer The buffer to write into
-     * @param token Might be one of asio::use_awaitable, asio::use_future, asio::as_single(asio::use_awaitable), asio::as_tuple(asio::use_awaitable), asio::deferred or many more.
+     * @param token Might be one of asio::use_awaitable, asio::use_future, asio::as_tuple(asio::use_awaitable), asio::deferred or many more.
      * @return Depends on what token was chosen.
      */
     template<typename MutableBufferSequence,
@@ -270,8 +271,9 @@ namespace my {
 
         // Post work to the strand of the ProducerImpl and perform the read.
         // This avoids concurrent access to the read data.
-        // NOTE: Do not capture the completion_handler by reference! It is fine to capture the buffer and this by reference though since the user must ensure the streams and the buffers lifetimes.
-        asio::post(impl->strand, [this, &buffer, impl,
+        // NOTE: Do not capture the completion_handler by reference! It is fine to capture this by reference since the user must ensure the streams lifetimes.
+        // NOTE: Do NOT take the buffer by reference!
+        asio::post(impl->strand, [this, buffer = std::move(buffer), impl,
                                   resultWorkGuard = std::move(resultWorkGuard),
                                   completion_handler = std::forward<CompletionToken>(completion_handler)]() mutable {
           // We made it to the ProducerImpls execution_context! Yay

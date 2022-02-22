@@ -22,11 +22,17 @@ endif::[]
 
 == Targets
 
-=== CustomAsioStreamsExe
+=== CustomAsioReadStreams
 
 This is the main target of the project.
 It shows off how to create a custom AsyncReadStream and how to interact with it.
 I have added plenty of comments to try and explain why I did what I did.
+
+=== CustomAsioWriteStreams
+
+Take a look at <<CustomAsioReadStreams>> first because it is more detailed.
+It shows off how to create a custom AsyncWriteStream and how to interact with it.
+I have added a few comments to try and explain why I did what I did.
 
 === IteratorConcepts
 
