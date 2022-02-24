@@ -11,7 +11,7 @@ using namespace my;
  * This is the actual main application loop.
  * It uses a new c++20 coroutine.
  */
-boost::asio::awaitable<void> mainCo(asio::io_context &appIO, Consumer & prod) {
+asio::awaitable<void> mainCo(asio::io_context &appIO, Consumer & prod) {
   try {
     // create strand to use for async operations (might not actually be needed due to the nature of coroutines.)
     // Instead, the appIO may be used directly.
