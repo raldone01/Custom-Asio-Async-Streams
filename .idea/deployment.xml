@@ -8,7 +8,11 @@
             <mapping deploy="/tmp/tmp.wz38MWkttM" local="$PROJECT_DIR$" />
           </mappings>
           <excludedPaths>
+            <excludedPath local="true" path="$PROJECT_DIR$/cmake-build-debug-mingw-msys2" />
+            <excludedPath local="true" path="$PROJECT_DIR$/cmake-build-debug-clang" />
             <excludedPath local="true" path="$PROJECT_DIR$/cmake-build-debug-wsl" />
+            <excludedPath local="true" path="$PROJECT_DIR$/cmake-build-debug-wsl" />
+            <excludedPath local="true" path="$PROJECT_DIR$/cmake-build-debug-remote-host" />
             <excludedPath local="true" path="$PROJECT_DIR$/cmake-build-debug-remote-host" />
           </excludedPaths>
         </serverdata>
