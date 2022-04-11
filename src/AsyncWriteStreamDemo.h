@@ -124,9 +124,9 @@ namespace my {
 
     ~Consumer() {
       // ensure the impl destructor is only called on the correct strand.
-      auto fut = asio::post(workGuard.get_executor(), std::packaged_task<void()>([impl = std::move(this->impl)]() {
+      auto fut = asio::post(workGuard.get_executor(), std::packaged_task<void()>([impl = std::move(this->impl)]() { // it's important to move the impl here
         // it's not necessary for this lambda to actually contain any code it's just here to run the destructor of the impl on the correct thread
-      })); // it's important to move the impl here
+      }));
       // fut.wait(); // uncomment this line to make the destructor synchron
       std::osyncstream(std::cout) << "T" << std::hash<std::thread::id>{}(std::this_thread::get_id())
                                   << " Producer destroyed" << std::endl;
