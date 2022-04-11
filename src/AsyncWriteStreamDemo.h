@@ -77,9 +77,6 @@ namespace my {
 
     public:
       explicit ConsumerImpl(asio::io_context &io) : strand{io}, timer{io} {}
-      /**
-       * Do not invoke twice.
-       */
       void ensureConsuming() {
         if (!consuming) {
           consuming = true;
@@ -113,18 +110,24 @@ namespace my {
     friend class MyAsyncWriteStream;
 
     std::shared_ptr <ConsumerImpl> impl;
+    /**
+     * This work guard is necessary to ensure that the io context doesn't exit
+     */
+    asio::executor_work_guard<asio::io_context::strand> workGuard;
   public:
-    explicit Consumer(asio::io_context &io) : impl{std::make_shared<ConsumerImpl>(io)} {
+    /**
+     * Running the impl constructor synchronous is ok because at this point there is no possibility that anything is running concurrently.
+     */
+    explicit Consumer(asio::io_context &io) : impl{std::make_shared<ConsumerImpl>(io)}, workGuard{asio::make_work_guard(impl->strand)} {
       impl->ensureConsuming();
     }
 
     ~Consumer() {
       // ensure the impl destructor is only called on the correct strand.
-      auto strand = impl->strand; // copy the strand before use as the move would invalidate it otherwise
-      auto fut = asio::post(strand, std::packaged_task<void()>([impl = std::move(this->impl)]() {})); // it's important to move the impl here
-      // it's not necessary for this lambda to actually contain any code it's just here to run the destructor of the impl on the correct thread
-      // uncomment the following line to make the destructor synchron
-      // fut.wait();
+      auto fut = asio::post(workGuard.get_executor(), std::packaged_task<void()>([impl = std::move(this->impl)]() {
+        // it's not necessary for this lambda to actually contain any code it's just here to run the destructor of the impl on the correct thread
+      })); // it's important to move the impl here
+      // fut.wait(); // uncomment this line to make the destructor synchron
       std::osyncstream(std::cout) << "T" << std::hash<std::thread::id>{}(std::this_thread::get_id())
                                   << " Producer destroyed" << std::endl;
     }
