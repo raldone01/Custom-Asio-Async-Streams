@@ -21,11 +21,6 @@ find_package (Threads REQUIRED)
 
 add_executable(IteratorConcepts src/IteratorConcepts.cpp)
 
-add_executable(WorkGuards src/work_guards.cpp)
-target_compile_definitions(WorkGuards PRIVATE BOOST_ASIO_NO_DEPRECATED)
-target_link_libraries(WorkGuards PRIVATE Threads::Threads)
-target_link_libraries(WorkGuards PRIVATE Boost::asio Boost::thread)
-
 function(makeExe target sources)
     add_executable(${target} ${sources})
     target_include_directories(${target} PUBLIC src/)
@@ -37,6 +32,7 @@ function(makeExe target sources)
     endif()
 endfunction()
 
+makeExe(WorkGuards src/work_guards.cpp)
 makeExe(CustomAsioReadStream "mainRead.cpp")
 makeExe(CustomAsioWriteStream "mainWrite.cpp")
 
