@@ -174,7 +174,7 @@ namespace my {
       auto strand = impl->strand; // copy the strand before use as the move would invalidate it otherwise
       auto fut = asio::post(strand, std::packaged_task<void()>(
           [impl = std::move(this->impl)]() {})); // it's important to move the impl here
-      // it's not necessary for this lambda to actually contain any code it's just here to
+      // it's not necessary for this lambda to actually contain any code it's just here to run the destructor of the impl on the correct thread
       // uncomment the following line to make the destructor synchron
       // fut.wait();
       std::osyncstream(std::cout) << "T" << std::hash<std::thread::id>{}(std::this_thread::get_id())
