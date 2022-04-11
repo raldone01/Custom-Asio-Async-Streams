@@ -70,7 +70,7 @@ namespace my {
 
       void produce() {
         // replace a random char in the string
-        producedData[gen() % producedData.size()] = charset[gen() % (sizeof(charset)/sizeof(charset[0]))];
+        producedData[gen() % producedData.size()] = charset[gen() % (sizeof(charset) / sizeof(charset[0]))];
         std::osyncstream(std::cout) << "T" << std::hash<std::thread::id>{}(std::this_thread::get_id())
                                     << " Produced "
                                     << ops
@@ -126,6 +126,7 @@ namespace my {
 
     public:
       explicit ProducerImpl(asio::io_context &io) : strand{io}, timer{io} {}
+
       /**
        * Do not invoke twice.
        */
@@ -159,9 +160,10 @@ namespace my {
      * The friend declaration can be avoided by a stream factory function.
      */
     template<typename Executor> requires asio::is_executor<Executor>::value
-    friend class MyAsyncReadStream;
+    friend
+    class MyAsyncReadStream;
 
-    std::shared_ptr <ProducerImpl> impl;
+    std::shared_ptr<ProducerImpl> impl;
   public:
     explicit Producer(asio::io_context &io) : impl{std::make_shared<ProducerImpl>(io)} {
       impl->startOps();
@@ -170,7 +172,8 @@ namespace my {
     ~Producer() {
       // ensure the impl destructor is only called on the correct strand.
       auto strand = impl->strand; // copy the strand before use as the move would invalidate it otherwise
-      auto fut = asio::post(strand, std::packaged_task<void()>([impl = std::move(this->impl)]() {})); // it's important to move the impl here
+      auto fut = asio::post(strand, std::packaged_task<void()>(
+          [impl = std::move(this->impl)]() {})); // it's important to move the impl here
       // it's not necessary for this lambda to actually contain any code it's just here to
       // uncomment the following line to make the destructor synchron
       // fut.wait();
@@ -202,13 +205,14 @@ namespace my {
      * NOTE: This might not exist if you are implementing something that actually consumes the read data.
      */
     size_t end;
-  public:
+
     /**
      * Hold a weak_ptr to the ProducerImpl.
      * MyAsyncReadStream behaves like a file descriptor.
      * If the Producer object is destroyed by the user an error code will be returned on the next read.
      */
     std::weak_ptr<ProducerImpl> implRef;
+  public:
 
     /**
      * If MyAsyncReadStream should prevent the ProducerImpl from being destroyed even though the Producer class was destroyed
@@ -244,7 +248,7 @@ namespace my {
      * @return Depends on what token was chosen.
      */
     template<typename MutableBufferSequence,
-        asio::completion_token_for <async_rw_handler>
+        asio::completion_token_for<async_rw_handler>
         CompletionToken = typename asio::default_completion_token<Executor>::type>
     requires asio::is_mutable_buffer_sequence<MutableBufferSequence>::value
     auto async_read_some(const MutableBufferSequence &buffer,
@@ -267,11 +271,12 @@ namespace my {
         if (impl == nullptr) {
           // Do not directly invoke the completion_handler
           // According to the specification the completion_handler MUST NOT be invoked in the async_read_some function.
-          asio::post(this->executor, [completion_handler = std::forward<CompletionToken>(completion_handler)]() mutable {
-            std::osyncstream(std::cout) << "T" << std::hash < std::thread::id > {}(std::this_thread::get_id())
-                                        << " read bad_descriptor" << std::endl;
-            completion_handler(asio::error::bad_descriptor, 0);
-          });
+          asio::post(this->executor,
+                     [completion_handler = std::forward<CompletionToken>(completion_handler)]() mutable {
+                       std::osyncstream(std::cout) << "T" << std::hash<std::thread::id>{}(std::this_thread::get_id())
+                                                   << " read bad_descriptor" << std::endl;
+                       completion_handler(asio::error::bad_descriptor, 0);
+                     });
           return;
         }
         // Construct a WorkGuard to prevent the user's executor from running out of work while the async operation is still in progress
@@ -282,10 +287,10 @@ namespace my {
         // NOTE: Do not capture the completion_handler by reference! It is fine to capture this by reference since the user must ensure the streams lifetimes.
         // NOTE: Do NOT take the buffer by reference!
         asio::post(impl->strand, [this, buffer = std::move(buffer), impl,
-                                  resultWorkGuard = std::move(resultWorkGuard),
-                                  completion_handler = std::forward<CompletionToken>(completion_handler)]() mutable {
+            resultWorkGuard = std::move(resultWorkGuard),
+            completion_handler = std::forward<CompletionToken>(completion_handler)]() mutable {
           // We made it to the ProducerImpls execution_context! Yay
-          std::osyncstream(std::cout) << "T" << std::hash < std::thread::id > {}(std::this_thread::get_id())
+          std::osyncstream(std::cout) << "T" << std::hash<std::thread::id>{}(std::this_thread::get_id())
                                       << " read performing read" << std::endl;
 
           // The rest is smooth sailing. Get the iterators from the buffer and perform the actual read.
@@ -320,11 +325,11 @@ namespace my {
           err = asio::error::eof;
           completion:
           // Observe how the execution_context changes between the next two log statements
-          std::osyncstream(std::cout) << "T" << std::hash < std::thread::id > {}(std::this_thread::get_id())
+          std::osyncstream(std::cout) << "T" << std::hash<std::thread::id>{}(std::this_thread::get_id())
                                       << " read before completion post" << std::endl;
           asio::post(this->executor,
                      [err, it, completion_handler = std::forward<CompletionToken>(completion_handler)]() mutable {
-                       std::osyncstream(std::cout) << "T" << std::hash < std::thread::id > {}(std::this_thread::get_id())
+                       std::osyncstream(std::cout) << "T" << std::hash<std::thread::id>{}(std::this_thread::get_id())
                                                    << " read invoking completion_handler: "
                                                    << err.message() << " " << it << std::endl;
                        completion_handler(err, it);

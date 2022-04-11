@@ -143,13 +143,14 @@ namespace my {
      * Holds the executor used to invoke the completion_handlers.
      */
     Executor executor;
-  public:
+
     /**
      * Hold a weak_ptr to the ConsumerImpl.
      * MyAsyncWriteStream behaves like a file descriptor.
      * If the Consumer object is destroyed by the user an error code will be returned on the next write.
      */
     std::weak_ptr<ConsumerImpl> implRef;
+  public:
 
     /**
      * If MyAsyncWriteStream should prevent the ConsumerImpl from being destroyed even though the Consumer class was destroyed
