@@ -284,7 +284,7 @@ namespace my {
 
         // Post work to the strand of the ProducerImpl and perform the read.
         // This avoids concurrent access to the read data.
-        // NOTE: Do not capture the completion_handler by reference! It is fine to capture this by reference since the user must ensure the streams lifetimes.
+        // NOTE: Capture the completion_handler by reference! It is fine to capture this by reference since the user must ensure the streams lifetimes.
         // NOTE: Do NOT take the buffer by reference!
         asio::post(impl->strand, [this, buffer = std::move(buffer), impl,
             resultWorkGuard = std::move(resultWorkGuard),
@@ -310,7 +310,7 @@ namespace my {
               // err = asio::error::eof; // Return this only if you know there is no more data coming.
               goto completion;
 
-              // NOTE: DO NOT BLOCK HERE. This would blockt the ProducerImpl which you NEVER want to block.
+              // NOTE: DO NOT BLOCK HERE. This would block the ProducerImpl which you NEVER want to block.
               // Instead, you could save the stream(this) and the completion_handler to a vector in the ProducerImpl
               // and have it finish the read call the completion_handler.
               // (Use post(stream->executor, lambda { completion_handler(ec, n); }); To ensure the correct execution_context.)

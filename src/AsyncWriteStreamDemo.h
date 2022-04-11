@@ -219,7 +219,7 @@ namespace my {
 
         // Post work to the strand of the ConsumerImpl and perform the write.
         // This avoids concurrent access to the data.
-        // NOTE: Do not capture the completion_handler by reference! It is fine to capture this by reference since the user must ensure the streams lifetimes.
+        // NOTE: Capture the completion_handler by reference! It is fine to capture this by reference since the user must ensure the streams lifetimes.
         // NOTE: Do NOT take the buffer by reference!
         asio::post(impl->strand, [this, buffer = std::move(buffer), impl,
             resultWorkGuard = std::move(resultWorkGuard),
@@ -241,7 +241,7 @@ namespace my {
               // err = asio::error::eof; // Return this only if you know the output buffer won't empty again.
               goto completion;
 
-              // NOTE: DO NOT BLOCK HERE. This would blockt the ConsumerImpl which you NEVER want to block.
+              // NOTE: DO NOT BLOCK HERE. This would block the ConsumerImpl which you NEVER want to block.
               // Instead, you could save the stream(this) and the completion_handler to a vector in the ConsumerImpl
               // and have it finish the write call the completion_handler.
               // (Use post(stream->executor, lambda { completion_handler(ec, n); }); To ensure the correct execution_context.)
