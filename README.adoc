@@ -34,7 +34,7 @@ I have added plenty of comments to try and explain why I did what I did.
 
 === CustomAsioWriteStream
 
-Take a look at <<CustomAsioReadStreams>> first because it is more detailed.
+Take a look at CustomAsioReadStreams first because it is more detailed.
 
 This target shows off how to create a custom AsyncWriteStream and how to interact with it.
 I have added a few comments to try and explain why I did what I did.
