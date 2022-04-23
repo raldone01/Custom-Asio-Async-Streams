@@ -32,14 +32,13 @@ asio::awaitable<void> mainCo(asio::io_context &appIO, Producer & prod) {
     // that's why the MyAsyncReadStream takes an executor as an argument in its constructor to ensure that the
     // execution_context doesn't change accidentally
 
-    std::osyncstream(std::cout) << "T" << std::hash<std::thread::id>{}(std::this_thread::get_id())
-                                << " Read done: Bytes: "
-                                << n
-                                << " ec: "
-                                << ec.message()
-                                << std::endl;
+    tout() << "MC read done: bytes: "
+           << n
+           << " ec: "
+           << ec.message()
+           << std::endl;
   } catch (std::exception &e) {
-    std::printf("echo Exception: %s\n", e.what());
+    tout() << "MC echo Exception: " << e.what() << std::endl;
   }
 }
 
@@ -51,11 +50,9 @@ int main() {
     auto prodWork = asio::make_work_guard(prodIO);
 
     prodThread = boost::thread{[&prodIO] {
-      std::osyncstream(std::cout) << "PROD RUN START: " << std::hash<std::thread::id>{}(std::this_thread::get_id())
-                                  << std::endl;
+      tout() << "ProdThread run start" << std::endl;
       prodIO.run();
-      std::osyncstream(std::cout) << "PROD RUN ENDED: " << std::hash<std::thread::id>{}(std::this_thread::get_id())
-                                  << std::endl;
+      tout() << "ProdThread run done" << std::endl;
     }};
     asio::io_context appIO;
 
@@ -63,14 +60,11 @@ int main() {
 
     asio::co_spawn(appIO, mainCo(appIO, prod), asio::detached);
 
-    std::osyncstream(std::cout) << "Main START: " << std::hash<std::thread::id>{}(std::this_thread::get_id())
-                                << std::endl;
-
+    tout() << "MainThread run start" << std::endl;
     appIO.run();
-    std::osyncstream(std::cout) << "Main DONE: " << std::hash<std::thread::id>{}(std::this_thread::get_id())
-                                << std::endl;
+    tout() << "MainThread run done" << std::endl;
   }
   prodThread.join();
-  std::osyncstream(std::cout) << "Main EXIT: " << std::hash<std::thread::id>{}(std::this_thread::get_id()) << std::endl;
+  tout() << "MainFunc exit" << std::endl;
   return 42;
 }

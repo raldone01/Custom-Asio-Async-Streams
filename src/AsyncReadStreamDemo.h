@@ -7,10 +7,10 @@ You should have received a copy of the GNU General Public License along with thi
 #ifndef ASYNCREADSTREAMDEMO_H
 #define ASYNCREADSTREAMDEMO_H
 
+#include "Helpers.h"
+
 #include <random>
 #include <memory>
-#include <iostream>
-#include <syncstream>
 #include <boost/asio.hpp>
 
 namespace my {
@@ -71,12 +71,11 @@ namespace my {
       void produce() {
         // replace a random char in the string
         producedData[gen() % producedData.size()] = charset[gen() % (sizeof(charset) / sizeof(charset[0]))];
-        std::osyncstream(std::cout) << "T" << std::hash<std::thread::id>{}(std::this_thread::get_id())
-                                    << " Produced "
-                                    << ops
-                                    << " Data: "
-                                    << producedData
-                                    << std::endl;
+        tout() << "ProdImpl produced "
+               << ops
+               << " data: "
+               << producedData
+               << std::endl;
         // also append a random string
         producedData += gen_string(5, gen);
       }
@@ -143,9 +142,7 @@ namespace my {
        * It may also be called by veryExpensiveOperationAllowEarlyExit() but is already on our strand.
        */
       ~ProducerImpl() {
-        std::osyncstream(std::cout) << "T" << std::hash<std::thread::id>{}(std::this_thread::get_id())
-                                    << " ProdImpl being destroyed"
-                                    << std::endl;
+        tout() << "ProdImpl being destroyed" << std::endl;
       }
     };
   }
@@ -173,7 +170,7 @@ namespace my {
      * Running the impl constructor synchronous is ok because at this point there is no possibility that anything is running concurrently.
      */
     explicit Producer(asio::io_context &io) : impl{std::make_shared<ProducerImpl>(io)}, workGuard{asio::make_work_guard(impl->strand)} {
-      impl->startOps();
+      impl->startOps(); // This function can not be called from the constructor because the shared pointer is not yet accessible.
     }
 
     ~Producer() {
@@ -182,8 +179,7 @@ namespace my {
         // it's not necessary for this lambda to actually contain any code it's just here to run the destructor of the impl on the correct thread
       }));
       // fut.wait(); // uncomment this line to make the destructor synchron
-      std::osyncstream(std::cout) << "T" << std::hash<std::thread::id>{}(std::this_thread::get_id())
-                                  << " Producer destroyed" << std::endl;
+      tout() << "Prod destroyed" << std::endl;
     }
   };
 
@@ -261,14 +257,14 @@ namespace my {
       // the async_initiate function takes a lambda that receives a completion_handler to invoke to indicate the completion of the asynchronous operation
       // The lambda will be called in the same execution_context as the async_read_some function.
       // async_initiate directly calls the lambda we passed to it.
-      // Therefore, it is OK for us to capture by reference.
+      // However, the parameters of the async_read_some function are invalid inside the lambda.
+      // Only parameters whose lifetime is guaranteed by an above context may be accessed inside the lambda (aka reference/pointer parameters).
       return asio::async_initiate<CompletionToken, async_rw_handler>([&](auto completion_handler) {
         // If you get an error on the following line it means that your handler
         // does not meet the documented type requirements for a ReadHandler.
         BOOST_ASIO_READ_HANDLER_CHECK(CompletionToken, completion_handler) type_check;
 
-        std::osyncstream(std::cout) << "T" << std::hash<std::thread::id>{}(std::this_thread::get_id())
-                                    << " read async_init" << std::endl;
+        tout() << "ARS async_init" << std::endl; // ARS = AsyncReadStream
         // Get a strong reference to the ProducerImpl.
         auto impl = this->implRef.lock();
 
@@ -278,8 +274,7 @@ namespace my {
           // According to the specification the completion_handler MUST NOT be invoked in the async_read_some function.
           asio::post(this->executor,
                      [completion_handler = std::forward<CompletionToken>(completion_handler)]() mutable {
-                       std::osyncstream(std::cout) << "T" << std::hash<std::thread::id>{}(std::this_thread::get_id())
-                                                   << " read bad_descriptor" << std::endl;
+                       tout() << "ARS bad_descriptor" << std::endl;
                        completion_handler(asio::error::bad_descriptor, 0);
                      });
           return;
@@ -295,8 +290,7 @@ namespace my {
             resultWorkGuard = std::move(resultWorkGuard),
             completion_handler = std::forward<CompletionToken>(completion_handler)]() mutable {
           // We made it to the ProducerImpls execution_context! Yay
-          std::osyncstream(std::cout) << "T" << std::hash<std::thread::id>{}(std::this_thread::get_id())
-                                      << " read performing read" << std::endl;
+          tout() << "ARS performing read" << std::endl;
 
           // The rest is smooth sailing. Get the iterators from the buffer and perform the actual read.
           auto buf_begin = asio::buffers_begin(buffer);
@@ -330,13 +324,11 @@ namespace my {
           err = asio::error::eof;
           completion:
           // Observe how the execution_context changes between the next two log statements
-          std::osyncstream(std::cout) << "T" << std::hash<std::thread::id>{}(std::this_thread::get_id())
-                                      << " read before completion post" << std::endl;
+          tout() << "ARS before completion post" << std::endl;
           asio::post(this->executor,
                      [err, it, completion_handler = std::forward<CompletionToken>(completion_handler)]() mutable {
-                       std::osyncstream(std::cout) << "T" << std::hash<std::thread::id>{}(std::this_thread::get_id())
-                                                   << " read invoking completion_handler: "
-                                                   << err.message() << " " << it << std::endl;
+                       tout() << "ARS invoking completion_handler: "
+                              << err.message() << " " << it << std::endl;
                        completion_handler(err, it);
                      });
         });

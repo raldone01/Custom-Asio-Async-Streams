@@ -10,10 +10,16 @@ include(cmake/CPM.cmake)
 
 # set CPM_SOURCE_CACHE env var
 CPMAddPackage(
-        NAME Boost
-        VERSION 1.78.0
-        GITHUB_REPOSITORY "boostorg/boost"
-        GIT_TAG "boost-1.78.0"
+  NAME Boost
+  VERSION 1.78.0
+  GITHUB_REPOSITORY "boostorg/boost"
+  GIT_TAG "boost-1.78.0"
+)
+CPMAddPackage(
+  NAME fmt
+  VERSION 8.1.1
+  GITHUB_REPOSITORY "fmtlib/fmt"
+  GIT_TAG "8.1.1"
 )
 find_package (Threads REQUIRED)
 
@@ -27,6 +33,7 @@ function(makeExe target sources)
     target_compile_definitions(${target} PRIVATE BOOST_ASIO_NO_DEPRECATED)
     target_link_libraries(${target} PRIVATE Threads::Threads)
     target_link_libraries(${target} PRIVATE Boost::beast Boost::thread)
+    target_link_libraries(${target} PRIVATE fmt)
     if(WIN32)
         target_link_libraries(${target} PRIVATE wsock32 ws2_32)
     endif()
@@ -35,6 +42,7 @@ endfunction()
 makeExe(WorkGuards src/work_guards.cpp)
 makeExe(CustomAsioReadStream "mainRead.cpp")
 makeExe(CustomAsioWriteStream "mainWrite.cpp")
+makeExe(SimpleAsyncFunction "simple_async_function.cpp")
 
 IF(CMAKE_BUILD_TYPE MATCHES DEBUG)
     add_compile_options(-fno-omit-frame-pointer -ggdb3 -O0) # clang -fcoroutines-ts -stdlib=libstdc++

@@ -12,10 +12,10 @@ You should have received a copy of the GNU General Public License along with thi
  * AsyncReadStream is more detailed.
  */
 
+#include "Helpers.h"
+
 #include <random>
 #include <memory>
-#include <iostream>
-#include <syncstream>
 #include <boost/asio.hpp>
 
 namespace my {
@@ -48,10 +48,9 @@ namespace my {
         if (consumedData.size()) {
           auto out = consumedData[0];
           consumedData = consumedData.erase(0, 1);
-          std::osyncstream(std::cout) << "T" << std::hash<std::thread::id>{}(std::this_thread::get_id())
-                                      << " Consumed "
-                                      << out
-                                      << std::endl;
+          tout() << "ConsImpl consumed "
+                 << out
+                 << std::endl;
           return true;
         }
         return false;
@@ -90,9 +89,7 @@ namespace my {
        * The Consumer wrapper ensures that this destructor is only called on its strand.
        */
       ~ConsumerImpl() {
-        std::osyncstream(std::cout) << "T" << std::hash<std::thread::id>{}(std::this_thread::get_id())
-                                    << " ConsImpl being destroyed"
-                                    << std::endl;
+        tout() << "ConsImpl being destroyed" << std::endl;
       }
     };
   }
@@ -119,7 +116,7 @@ namespace my {
      * Running the impl constructor synchronous is ok because at this point there is no possibility that anything is running concurrently.
      */
     explicit Consumer(asio::io_context &io) : impl{std::make_shared<ConsumerImpl>(io)}, workGuard{asio::make_work_guard(impl->strand)} {
-      impl->ensureConsuming();
+      impl->ensureConsuming(); // This function can not be called from the constructor because the shared pointer is not yet accessible.
     }
 
     ~Consumer() {
@@ -128,8 +125,7 @@ namespace my {
         // it's not necessary for this lambda to actually contain any code it's just here to run the destructor of the impl on the correct thread
       }));
       // fut.wait(); // uncomment this line to make the destructor synchron
-      std::osyncstream(std::cout) << "T" << std::hash<std::thread::id>{}(std::this_thread::get_id())
-                                  << " Producer destroyed" << std::endl;
+      tout() << "Cons destroyed" << std::endl;
     }
   };
 
@@ -195,14 +191,14 @@ namespace my {
       // the async_initiate function takes a lambda that receives a completion_handler to invoke to indicate the completion of the asynchronous operation
       // The lambda will be called in the same execution_context as the async_write_some function.
       // async_initiate directly calls the lambda we passed to it.
-      // Therefore, it is OK for us to capture by reference.
+      // However, the parameters of the async_write_some function are invalid inside the lambda.
+      // Only parameters whose lifetime is guaranteed by an above context may be accessed inside the lambda (aka reference/pointer parameters).
       return asio::async_initiate<CompletionToken, async_rw_handler>([&](auto completion_handler) {
         // If you get an error on the following line it means that your handler
         // does not meet the documented type requirements for a WriteHandler.
         BOOST_ASIO_WRITE_HANDLER_CHECK(CompletionToken, completion_handler) type_check;
 
-        std::osyncstream(std::cout) << "T" << std::hash<std::thread::id>{}(std::this_thread::get_id())
-                                    << " write async_init" << std::endl;
+        tout() << "AWS async_init" << std::endl; // AWS = AsyncWriteStream
         // Get a strong reference to the ConsumerImpl.
         auto impl = this->implRef.lock();
 
@@ -211,8 +207,7 @@ namespace my {
           // Do not directly invoke the completion_handler
           // According to the specification the completion_handler MUST NOT be invoked in the async_write_some function.
           asio::post(this->executor, [completion_handler = std::forward<CompletionToken>(completion_handler)]() mutable {
-            std::osyncstream(std::cout) << "T" << std::hash < std::thread::id > {}(std::this_thread::get_id())
-                                        << " write bad_descriptor" << std::endl;
+            tout() << "AWS bad_descriptor" << std::endl;
             completion_handler(asio::error::bad_descriptor, 0);
           });
           return;
@@ -228,8 +223,7 @@ namespace my {
             resultWorkGuard = std::move(resultWorkGuard),
             completion_handler = std::forward<CompletionToken>(completion_handler)]() mutable {
           // We made it to the ConsumerImpls execution_context! Yay
-          std::osyncstream(std::cout) << "T" << std::hash < std::thread::id > {}(std::this_thread::get_id())
-                                      << " write performing write" << std::endl;
+          tout() << "AWS performing write" << std::endl;
 
           // The rest is smooth sailing. Get the iterators from the buffer and perform the actual write.
           auto buf_begin = asio::buffers_begin(buffer);
@@ -259,13 +253,11 @@ namespace my {
           completion:
           impl->ensureConsuming();
           // Observe how the execution_context changes between the next two log statements
-          std::osyncstream(std::cout) << "T" << std::hash < std::thread::id > {}(std::this_thread::get_id())
-                                      << " write before completion post" << std::endl;
+          tout() << "AWS before completion post" << std::endl;
           asio::post(this->executor,
                      [err, it, completion_handler = std::forward<CompletionToken>(completion_handler)]() mutable {
-                       std::osyncstream(std::cout) << "T" << std::hash < std::thread::id > {}(std::this_thread::get_id())
-                                                   << " write invoking completion_handler: "
-                                                   << err.message() << " " << it << std::endl;
+                       tout() << "AWS invoking completion_handler: "
+                              << err.message() << " " << it << std::endl;
                        completion_handler(err, it);
                      });
         });

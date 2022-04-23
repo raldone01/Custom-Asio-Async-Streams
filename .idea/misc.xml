@@ -6,4 +6,9 @@
       <file path="$PROJECT_DIR$/cmake-build-debug-wsl" />
     </excludeRoots>
   </component>
+  <component name="SwUserDefinedSpecifications">
+    <option name="specTypeByUrl">
+      <map />
+    </option>
+  </component>
 </project>

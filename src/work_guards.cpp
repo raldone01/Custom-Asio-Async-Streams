@@ -9,10 +9,10 @@ You should have received a copy of the GNU General Public License along with thi
  * https://stackoverflow.com/questions/71194070/asio-difference-between-prefer-require-and-make-work-guard
  */
 
+#include "Helpers.h"
+
 #include <boost/asio.hpp>
 #include <boost/thread.hpp>
-#include <syncstream>
-#include <iostream>
 
 namespace asio = boost::asio;
 
@@ -30,14 +30,14 @@ int main() {
     // prodWork3 = asio::any_io_executor{}; // can be cleared
 
     workerThread = boost::thread{[&workerIO] {
-      std::osyncstream(std::cout) << "Worker RUN START: " << std::hash<std::thread::id>{}(std::this_thread::get_id()) << std::endl;
+      tout() << "Worker run start" << std::endl;
       workerIO.run();
-      std::osyncstream(std::cout) << "Worker RUN ENDED: " << std::hash<std::thread::id>{}(std::this_thread::get_id()) << std::endl;
+      tout() << "Worker run done" << std::endl;
     }};
     asio::io_context appIO;
 
 
-    std::osyncstream(std::cout) << "Main RUN START: " << std::hash<std::thread::id>{}(std::this_thread::get_id()) << std::endl;
+    tout() << "Main: run start" << std::endl;
 
     // schedule work here
     {
@@ -45,20 +45,20 @@ int main() {
       timer.expires_after(std::chrono::seconds(4));
       timer.async_wait([&workerIO] (auto ec) {
         if (ec == asio::error::operation_aborted)
-          std::osyncstream(std::cout) << "Main: timer aborted " << std::hash<std::thread::id>{}(std::this_thread::get_id()) << std::endl;
-        std::osyncstream(std::cout) << "Main: timer expired " << std::hash<std::thread::id>{}(std::this_thread::get_id()) << std::endl;
+          tout() << "Main: timer aborted" << std::endl;
+        tout() << "Main: timer expired" << std::endl;
         asio::post(workerIO.get_executor(), [] {
           // This is never executed without a work guard.
-          std::osyncstream(std::cout) << "Worker WORK DONE " << std::hash<std::thread::id>{}(std::this_thread::get_id()) << std::endl;
+          tout() << "Worker sent work done" << std::endl;
         });
-        std::osyncstream(std::cout) << "Main: work posted to worker " << std::hash<std::thread::id>{}(std::this_thread::get_id()) << std::endl;
+        tout() << "Main: after work posted to worker" << std::endl;
       });
     }
 
     appIO.run();
-    std::osyncstream(std::cout) << "Main RUN ENDED: " << std::hash<std::thread::id>{}(std::this_thread::get_id()) << std::endl;
+    tout() << "Main run done" << std::endl;
   }
   workerThread.join(); // wait for the worker to finish its posted work
-  std::osyncstream(std::cout) << "Main EXIT: " << std::hash<std::thread::id>{}(std::this_thread::get_id()) << std::endl;
+  tout() << "MainFunc exit" << std::endl;
   return 0;
 }

@@ -20,15 +20,19 @@ endif::[]
 
 {url-project}[CustomAsioStreams] is a small example showing how to create custom streams that integrate nicely into the asio library.
 
+== Building
+
+If you want to build this project you should define the `CPM_SOURCE_CACHE` env variable and point it to a folder to avoid downloading the dependencies multiple times. Boost and fmt will be installed to that directory.
+
 == Targets
 
-=== CustomAsioReadStreams
+=== CustomAsioReadStream
 
 This is the main target of the project.
 It shows off how to create a custom AsyncReadStream and how to interact with it.
 I have added plenty of comments to try and explain why I did what I did.
 
-=== CustomAsioWriteStreams
+=== CustomAsioWriteStream
 
 Take a look at <<CustomAsioReadStreams>> first because it is more detailed.
 
@@ -42,3 +46,17 @@ Shows how to use the new c++20 iterator concepts defined in the <iterator> heade
 === WorkGuards
 
 Shows off different kinds of work guards and an example use case.
+
+=== SimpleAsyncFunction
+
+Shows off how to write standalone async functions.
+It also shows how to call the via coroutines, callbacks and futures.
+All the shown calling patters also apply to the CustomAsioReadStream and the CustomAsioWriteStream.
+
+Checkout CustomAsioReadStreams before looking at this example.
+It should be used when using a stream is overkill and all data is available instantly.
+
+
+=== TODO
+
+* Add an example that shows how to use a modern coroutine to implement a SimpleAsyncFunction.
