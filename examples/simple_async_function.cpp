@@ -18,8 +18,20 @@ You should have received a copy of the GNU General Public License along with thi
 
 namespace asio = boost::asio;
 
+/**
+ * This global constant can be toggled to simulate an early failure in the simple_async_function.
+ * Use it to see how errors are propagated.
+ */
+const constexpr auto earlyFailureSimulator = false;
+
 class Impl {
 public:
+  /**
+   * This function indicates the RETURN type of the simple_async_function.
+   * As this example shows returning more than two values is possible but rather clunky.
+   * Instead I recommend to return a struct as the second return value when more values should be returned.
+   * The error_code parameter may be omitted if it's not needed.
+   */
   typedef void (async_callbackFunction)(boost::system::error_code ec, double exampleReturnValue1, double exampleReturnValue2);
 
   asio::io_context::strand strand;
@@ -74,11 +86,22 @@ asio::awaitable<void> mainCo(asio::io_context &appIO, Impl &impl) {
 
     tout() << "MC before calling impl" << std::endl;
 
-    auto result = co_await impl.async_simple_function(false, 12, 14, asio::use_awaitable);
+    // here you can choose between throwing and non throwing
+    const auto throwing = false;
+    if (!throwing) {
+      auto [ec, exampleReturnValue1, exampleReturnValue2] = co_await impl.async_simple_function(earlyFailureSimulator, 1, 2, asio::experimental::as_single(asio::use_awaitable));
 
-    tout() << "MC after calling impl"                         << std::endl
-           << " ExampleReturnValue1 "  << std::get<0>(result) << std::endl
-           << " ExampleReturnValue2 "  << std::get<1>(result) << std::endl;
+      tout() << "MC after calling impl"                         << std::endl
+             << " EC "                   << ec.message()        << std::endl
+             << " ExampleReturnValue1 "  << exampleReturnValue1 << std::endl
+             << " ExampleReturnValue2 "  << exampleReturnValue2 << std::endl;
+    } else {
+      auto result = co_await impl.async_simple_function(earlyFailureSimulator, 1, 2, asio::use_awaitable);
+
+      tout() << "MC after calling impl"                         << std::endl
+             << " ExampleReturnValue1 "  << std::get<0>(result) << std::endl
+             << " ExampleReturnValue2 "  << std::get<1>(result) << std::endl;
+    }
   } catch (boost::system::system_error const &e) {
     tout() << "MC echo Exception: " << e.what() << std::endl;
     // tout() << "MC echo Exception: " << e.code().message().c_str() << std::endl;
@@ -133,7 +156,7 @@ int mainCallback() {
     asio::post(appIO, [&] {
       // now we are running in the appIO context
       tout() << "Main run start" << std::endl;
-      impl.async_simple_function(false, 1, 2, [] (const boost::system::error_code & ec, double exampleReturnValue1, double exampleReturnValue2) {
+      impl.async_simple_function(earlyFailureSimulator, 1, 2, [] (const boost::system::error_code & ec, double exampleReturnValue1, double exampleReturnValue2) {
         // now we should be back running on appIO context again
         tout() << "Main after calling impl"                       << std::endl
                << " EC "                   << ec.message()        << std::endl
@@ -169,7 +192,7 @@ int mainFuture() {
 
     tout() << "MainThread run start" << std::endl;
     try {
-      auto fut = impl.async_simple_function(false, 1, 2, asio::use_future);
+      auto fut = impl.async_simple_function(earlyFailureSimulator, 1, 2, asio::use_future);
       fut.wait();
       auto ret = fut.get();
       tout() << "MainThread after calling impl"                         << std::endl

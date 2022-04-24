@@ -25,7 +25,7 @@ find_package (Threads REQUIRED)
 
 
 
-add_executable(IteratorConcepts src/IteratorConcepts.cpp)
+add_executable(IteratorConcepts "examples/IteratorConcepts.cpp")
 
 function(makeExe target sources)
     add_executable(${target} ${sources})
@@ -39,10 +39,11 @@ function(makeExe target sources)
     endif()
 endfunction()
 
-makeExe(WorkGuards src/work_guards.cpp)
-makeExe(CustomAsioReadStream "mainRead.cpp")
-makeExe(CustomAsioWriteStream "mainWrite.cpp")
-makeExe(SimpleAsyncFunction "simple_async_function.cpp")
+makeExe(WorkGuards "examples/work_guards.cpp")
+makeExe(CustomAsioReadStream "examples/mainRead.cpp")
+makeExe(CustomAsioWriteStream "examples/mainWrite.cpp")
+makeExe(SimpleAsyncFunction "examples/simple_async_function.cpp")
+makeExe(CoroContextSwitching "examples/coro_context_switching.cpp")
 
 IF(CMAKE_BUILD_TYPE MATCHES DEBUG)
     add_compile_options(-fno-omit-frame-pointer -ggdb3 -O0) # clang -fcoroutines-ts -stdlib=libstdc++

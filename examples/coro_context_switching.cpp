@@ -4,42 +4,39 @@ This program is distributed in the hope that it will be useful, but WITHOUT ANY 
 You should have received a copy of the GNU General Public License along with this program. If not, see <https://www.gnu.org/licenses/>.
  */
 
-#include "src/AsyncReadStreamDemo.h"
+#include "Helpers.h"
 
 #include <coroutine>
+#include <boost/asio.hpp>
 #include <boost/asio/experimental/as_single.hpp>
 #include <boost/bind/bind.hpp>
 #include <boost/thread/thread.hpp>
 
-using namespace my;
+namespace asio = boost::asio;
 
 /**
  * This is the actual main application loop.
  * It uses a new c++20 coroutine.
  */
-asio::awaitable<void> mainCo(asio::io_context &appIO, Producer & prod) {
-  try {
-    // create strand to use for async operations (might not actually be needed due to the nature of coroutines.)
-    // Instead, the appIO may be used directly.
-    auto appStrand = asio::io_context::strand{appIO};
-
-    // Create a read stream from our producer
-    auto readStream = MyAsyncReadStream(appStrand, prod, 0, 10);
-    std::vector<std::byte> dataBackend;
-    auto dynBuffer = asio::dynamic_buffer(dataBackend, 50);
-    auto [ec, n] = co_await asio::async_read(readStream, dynBuffer, asio::experimental::as_single(asio::use_awaitable));
-    // WARNING after co_await calls your execution_context might have changed
-    // that's why the MyAsyncReadStream takes an executor as an argument in its constructor to ensure that the
-    // execution_context doesn't change accidentally
-
-    tout() << "MC read done: bytes: "
-           << n
-           << " ec: "
-           << ec.message()
-           << std::endl;
-  } catch (std::exception &e) {
-    tout() << "MC echo Exception: " << e.what() << std::endl;
-  }
+asio::awaitable<void> mainCo(asio::io_context &appIO, asio::io_context &prodIO) {
+  auto astrand = asio::io_context::strand{appIO};
+  auto pstrand = asio::io_context::strand{prodIO};
+  tout() << "MC on APPIO" << std::endl;
+  co_await asio::post(pstrand, asio::use_awaitable);
+  tout() << "MC on PRODIO" << std::endl;
+  co_await asio::post(astrand, asio::use_awaitable);
+  tout() << "MC on APPIO" << std::endl;
+  co_await asio::post(pstrand, asio::use_awaitable);
+  tout() << "MC on PRODIO" << std::endl;
+  co_await asio::post(pstrand, asio::use_awaitable); // nop - no operation because we are already on the correct execution_context
+  tout() << "MC on PRODIO" << std::endl;
+  co_await asio::post(astrand, asio::use_awaitable);
+  tout() << "MC on APPIO" << std::endl;
+  /*
+   * As you can see the execution context can change after calling co_await!!!!
+   * When dealing with badly written async function this CAN ba a BIG issue!!!!
+   * If you come across a badly behaved function you can just `co_await asio::post(yourCorrectExecutor, asio::use_awaitable);` to fix the issue.
+   */
 }
 
 int main() {
@@ -56,15 +53,12 @@ int main() {
     }};
     asio::io_context appIO;
 
-    auto prod = Producer{prodIO};
-
-    asio::co_spawn(appIO, mainCo(appIO, prod), asio::detached);
+    asio::co_spawn(appIO, mainCo(appIO, prodIO), asio::detached);
 
     tout() << "MainThread run start" << std::endl;
     appIO.run();
     tout() << "MainThread run done" << std::endl;
   }
   prodThread.join();
-  tout() << "MainFunc exit" << std::endl;
   return 42;
 }

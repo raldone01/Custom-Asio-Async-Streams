@@ -26,6 +26,10 @@ If you want to build this project you should define the `CPM_SOURCE_CACHE` env v
 
 == Targets
 
+=== CoroContextSwitching
+
+Shows off how you can easily switch between execution_context using co_await and post.
+
 === CustomAsioReadStream
 
 This is the main target of the project.
@@ -56,7 +60,7 @@ All the shown calling patters also apply to the CustomAsioReadStream and the Cus
 Checkout CustomAsioReadStreams before looking at this example.
 It should be used when using a stream is overkill and all data is available instantly.
 
-
 === TODO
-
+* Check if get_associated_executor can be used in the custom streams example
 * Add an example that shows how to use a modern coroutine to implement a SimpleAsyncFunction.
+* Add gitattributes file to mark cpm
