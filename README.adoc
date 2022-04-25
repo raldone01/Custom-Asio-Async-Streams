@@ -73,7 +73,6 @@ Shows how to use the new c++20 iterator concepts defined in the <iterator> heade
 * SimpleAsyncFunction: Implement one with `async_initiate`
 * SimpleAsyncFunction: Implement one with `async_result`
 * SimpleAsyncFunction: Implement one with `co_spawn`
-* Add gitattributes file to mark cpm
 * NewEx: Show how to store completion handlers in a vector
 * NewEx: Show how the system executor trap is dangerous and how to exit it cleanly (use query)
 
