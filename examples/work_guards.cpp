@@ -7,18 +7,25 @@ You should have received a copy of the GNU General Public License along with thi
 /**
  * This file shows different ways of preventing an io_context from running out of work.
  * https://stackoverflow.com/questions/71194070/asio-difference-between-prefer-require-and-make-work-guard
+ * Thanks sehe!
  */
 
 #include "Helpers.h"
 
 #include <boost/asio.hpp>
-#include <boost/thread.hpp>
+#include <thread>
 
 namespace asio = boost::asio;
 
+/**
+ * Although all ways shown in this programs effectively are executor_work_guards
+ * you should really only use asio::make_work_guard(executor)
+ * as this is the proper way to do it.
+ * Also executor_work_guard has decoupled lifetime as a nifty feature. (`executor_work_guard.reset()`)
+ */
 int main() {
   asio::io_context workerIO;
-  boost::thread workerThread;
+  std::thread workerThread;
   {
     // ensure the worker io context stands by until work is posted at a later time
     // one of the below is needed for the worker to execute work which one should I use?
@@ -29,7 +36,7 @@ int main() {
     // asio::any_io_executor prodWork3 = asio::require(workerIO.get_executor(), asio::execution::outstanding_work_t::tracked);
     // prodWork3 = asio::any_io_executor{}; // can be cleared
 
-    workerThread = boost::thread{[&workerIO] {
+    workerThread = std::thread{[&workerIO] {
       tout() << "Worker run start" << std::endl;
       workerIO.run();
       tout() << "Worker run done" << std::endl;

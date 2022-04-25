@@ -29,6 +29,21 @@ If you want to build this project you should define the `CPM_SOURCE_CACHE` env v
 === CoroContextSwitching
 
 Shows off how you can easily switch between execution_context using co_await and post.
+Also shows how to make the `int main()` into a `asio::awaitable<int> mainCo()` coroutine.
+This is comparable to how you would make `node.js` asynchronous.
+
+=== SimpleAsyncFunction
+
+Shows off how to write standalone async functions.
+It also shows how to call the via coroutines, callbacks and futures.
+All the shown calling patters also apply to the CustomAsioReadStream and the CustomAsioWriteStream.
+
+Checkout CustomAsioReadStreams before looking at this example.
+It should be used when using a stream is overkill and all data is available instantly.
+
+=== WorkGuards
+
+Shows off different kinds of work guards and an example use case.
 
 === CustomAsioReadStream
 
@@ -43,24 +58,34 @@ Take a look at CustomAsioReadStreams first because it is more detailed.
 This target shows off how to create a custom AsyncWriteStream and how to interact with it.
 I have added a few comments to try and explain why I did what I did.
 
-=== IteratorConcepts
+=== Fluff - CoroOutcomeReturn
+
+Shows how to return a `boost::outcome` from an `asio::awaitable`.
+
+=== Fluff - IteratorConcepts
 
 Shows how to use the new c++20 iterator concepts defined in the <iterator> header.
 
-=== WorkGuards
-
-Shows off different kinds of work guards and an example use case.
-
-=== SimpleAsyncFunction
-
-Shows off how to write standalone async functions.
-It also shows how to call the via coroutines, callbacks and futures.
-All the shown calling patters also apply to the CustomAsioReadStream and the CustomAsioWriteStream.
-
-Checkout CustomAsioReadStreams before looking at this example.
-It should be used when using a stream is overkill and all data is available instantly.
-
 === TODO
-* Check if get_associated_executor can be used in the custom streams example
-* Add an example that shows how to use a modern coroutine to implement a SimpleAsyncFunction.
+* CustomStreams: Check if get_associated_executor can be used in the custom streams example
+* CustomStreams: use bind_executor in every post,defer,dispatch statement
+* SimpleAsyncFunction: Seperately show how to call async functions
+* SimpleAsyncFunction: Implement one with `async_initiate`
+* SimpleAsyncFunction: Implement one with `async_result`
+* SimpleAsyncFunction: Implement one with `co_spawn`
 * Add gitattributes file to mark cpm
+* NewEx: Show how to store completion handlers in a vector
+* NewEx: Show how the system executor trap is dangerous and how to exit it cleanly (use query)
+
+=== Questions
+* When is the first argument of `post, dispatch, defer` ever useful?
+ It's just a BAD FALLBACK when no bound executor is found. And if one is found it first post empty work to the FALLBACK and the dispatches from there to the associated executor. When is that EVER useful? post.hpp:63 https://www.boost.org/doc/libs/1_79_0/doc/html/boost_asio/reference/get_associated_executor/overload3.html
+* Additionally, the naming of the asio parameters is not really intuitive, and it's lacking parameter descriptions of the overloads of very popular functions `post, dispatch, defer`.
+* Does an `asio::awaitable` constitute work? Is it work?
+* Biggest issue for beginner is the lack of examples and documentation.
+  Even parameter names or simple sentences explaining one possible use case would be very helpful. Especially parameter descriptions. Also maybe note what the different overloads are for.
+
+=== About
+
+This repository is a collection of useful snippets I wrote to help me understand asio better.
+Thanks sehe for helping me out over on stackoverflow.
