@@ -9,11 +9,10 @@
 
 #include <fmt/format.h>
 
-inline std::osyncstream & tout() {
-  // use thread_local to avoid constructing these objects on every function call
-  thread_local auto hash = std::hash<std::thread::id>{}(std::this_thread::get_id());
-  thread_local auto hashStr = fmt::format("T{:04X} ", hash >> (sizeof(hash) - 2) * 8); // only display 2 bytes
-  thread_local auto stream = std::osyncstream(std::cout);
+inline std::osyncstream tout() {
+  auto hash = std::hash<std::thread::id>{}(std::this_thread::get_id());
+  auto hashStr = fmt::format("T{:04X} ", hash >> (sizeof(hash) - 2) * 8); // only display 2 bytes
+  auto stream = std::osyncstream(std::cout);
 
   stream << hashStr;
   return stream;

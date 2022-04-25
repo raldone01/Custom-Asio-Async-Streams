@@ -11,10 +11,10 @@ You should have received a copy of the GNU General Public License along with thi
 #include "Helpers.h"
 
 #include <coroutine>
+#include <future>
+
 #include <boost/asio.hpp>
 #include <boost/asio/experimental/as_single.hpp>
-#include <boost/bind/bind.hpp>
-#include <boost/thread/thread.hpp>
 
 namespace asio = boost::asio;
 
@@ -24,24 +24,51 @@ namespace asio = boost::asio;
  */
 const constexpr auto earlyFailureSimulator = false;
 
-class Impl {
+/**
+ * This class represents some sort of service that allows data to be exchange via async functions.
+ */
+template <typename Executor>
+/**
+ * We add this line to indicated that we do not support execution_contexts directly in the constructor.
+ * If we were to support contexts we would have to add facilities to unpack execution_contexts.
+ * So to use this with an execution_context you just have to call `ctx.get_executor()` before passing it to the constructor.
+ */
+// TODO: requires std::same_as<asio::is_executor<Executor>, std::true_type> /Boost/libs/asio/include/boost/asio/strand.hpp:445
+class AsyncService {
+  asio::strand<Executor> strand;
 public:
+  explicit AsyncService(Executor && exe) : strand{asio::make_strand(exe)} {}
+
   /**
-   * This function indicates the RETURN type of the simple_async_function.
-   * As this example shows returning more than two values is possible but rather clunky.
-   * Instead I recommend to return a struct as the second return value when more values should be returned.
-   * The error_code parameter may be omitted if it's not needed.
+   * This function typedef indicates the RETURN type of the async_functions.
+   * (In this case all functions use the same function typedef because they all return the same values.)
+   *
+   * Note:  Avoid returning more than two values.
+   *        Although it is possible it's rather clunky.
+   *
+   *        Instead I recommend to only return the error_code/std::exception_ptr and the value you want to return.
+   *        The return value MUST be default constructive.
+   *        If there is no possible error return value the error_code/ec parameter may be omitted.
    */
-  typedef void (async_callbackFunction)(boost::system::error_code ec, double exampleReturnValue1, double exampleReturnValue2);
+  typedef void (async_return_function)(boost::system::error_code ec, double exampleReturnValue1, double exampleReturnValue2);
+  //   typedef void (async_return_function)(boost::system::error_code ec, double exampleReturnValue1);  // use this to return one value with    error support
+  //   typedef void (async_return_function)(double exampleReturnValue1);                                // use this to return one value without error support
+  //   typedef void (async_return_function)(boost::system::error_code ec, struct yourReturnValues);     // use this if you have to return more than one value with error support
 
-  asio::io_context::strand strand;
+  /**
+   * This function shows how to implement a async function with completion token using an `asio::awaitable`.
+   */
+  template<asio::completion_token_for<async_return_function> CompletionToken>
+  auto async_coro_function(bool earlyFailure, uint32_t param1, uint32_t param2, CompletionToken && token) {
+    return asio::co_spawn(this->strand, [] () -> asio::awaitable<std::tuple<double, double>> {
+      co_return std::make_tuple(0.0, 0.0);
+    }, token);
+  }
 
-  explicit Impl(asio::io_context &io) : strand{io} {}
-
-  template<asio::completion_token_for<async_callbackFunction> CompletionToken>
+  template<asio::completion_token_for<async_return_function> CompletionToken>
   auto async_simple_function(bool failureSimulator, uint32_t param1, uint32_t param2,
                          CompletionToken &&token) {
-    return asio::async_initiate<CompletionToken, async_callbackFunction>(
+    return asio::async_initiate<CompletionToken, async_return_function>(
       // capture failureSimulator by value - See the comments in async_read_some in the AsyncReadStreamDemo.h file for more details.
       [&, failureSimulator, param1, param2](auto completion_handler) mutable {
         // this will get the executor that asio has already conveniently associated with the completion handler.
@@ -78,7 +105,7 @@ public:
  * This is the actual main application loop.
  * It uses a new c++20 coroutine.
  */
-asio::awaitable<void> mainCo(asio::io_context &appIO, Impl &impl) {
+asio::awaitable<int> mainCo(auto & appIO, auto &impl) {
   try {
     // create strand to use for async operations (might not actually be needed due to the nature of coroutines.)
     // Instead, the appIO may be used directly.
@@ -106,105 +133,91 @@ asio::awaitable<void> mainCo(asio::io_context &appIO, Impl &impl) {
     tout() << "MC echo Exception: " << e.what() << std::endl;
     // tout() << "MC echo Exception: " << e.code().message().c_str() << std::endl;
   }
+  co_return 42;
 }
 
 int mainCoroutine() {
   tout() << "========= MAIN COROUTINE START =========" << std::endl;
-  asio::io_context prodIO;
-  boost::thread prodThread;
-  {
-    // ensure the producer io context doesn't exit
-    auto prodWork = asio::make_work_guard(prodIO);
+  asio::io_context appCtx;
+  asio::thread_pool srvCtx{1};
 
-    prodThread = boost::thread{[&prodIO] {
-      tout() << "ProdThread run start" << std::endl;
-      prodIO.run();
-      tout() << "ProdThread run done" << std::endl;
-    }};
-    asio::io_context appIO;
+  // Print the thread id of the service thread.
+  asio::post(srvCtx, std::packaged_task<void()>([]() {
+    tout() << "ServiceThread run start" << std::endl;
+  })).wait();
 
-    auto impl = Impl(prodIO);
+  auto service = AsyncService(srvCtx.get_executor());
 
-    asio::co_spawn(appIO, mainCo(appIO, impl), asio::detached);
+  auto fut = asio::co_spawn(appCtx, mainCo(appCtx, service), asio::use_future);
 
-    tout() << "MainThread run start" << std::endl;
-    appIO.run();
-    tout() << "MainThread run done" << std::endl;
-  }
-  prodThread.join();
+  tout() << "MainThread run start" << std::endl;
+  appCtx.run();
+  tout() << "MainThread run done" << std::endl;
+
+  srvCtx.join(); // the service thread stops here
   tout() << "========= MAIN COROUTINE END   =========" << std::endl;
   return 42;
 }
 
 int mainCallback() {
   tout() << "========= MAIN CALLBACK START =========" << std::endl;
-  asio::io_context prodIO;
-  boost::thread prodThread;
-  {
-    // ensure the producer io context doesn't exit
-    auto prodWork = asio::make_work_guard(prodIO);
+  asio::io_context appCtx;
+  asio::thread_pool srvCtx{1};
 
-    prodThread = boost::thread{[&prodIO] {
-      tout() << "ProdThread run start" << std::endl;
-      prodIO.run();
-      tout() << "ProdThread run done" << std::endl;
-    }};
-    asio::io_context appIO;
+  // Print the thread id of the service thread.
+  asio::post(srvCtx, std::packaged_task<void()>([]() {
+    tout() << "ServiceThread run start" << std::endl;
+  })).wait();
 
-    auto impl = Impl(prodIO);
+  auto service = AsyncService(srvCtx.get_executor());
 
-    asio::post(appIO, [&] {
-      // now we are running in the appIO context
-      tout() << "Main run start" << std::endl;
-      impl.async_simple_function(earlyFailureSimulator, 1, 2, [] (const boost::system::error_code & ec, double exampleReturnValue1, double exampleReturnValue2) {
-        // now we should be back running on appIO context again
-        tout() << "Main after calling impl"                       << std::endl
-               << " EC "                   << ec.message()        << std::endl
-               << " ExampleReturnValue1 "  << exampleReturnValue1 << std::endl
-               << " ExampleReturnValue2 "  << exampleReturnValue2 << std::endl;
-      });
+  asio::post(appCtx, [&] {
+    // now we are running in the appIO context
+    tout() << "Main run start" << std::endl;
+    service.async_simple_function(earlyFailureSimulator, 1, 2, [] (const boost::system::error_code & ec, double exampleReturnValue1, double exampleReturnValue2) {
+      // now we should be back running on appIO context again
+      tout() << "Main after calling impl"                       << std::endl
+             << " EC "                   << ec.message()        << std::endl
+             << " ExampleReturnValue1 "  << exampleReturnValue1 << std::endl
+             << " ExampleReturnValue2 "  << exampleReturnValue2 << std::endl;
     });
+  });
 
-    tout() << "MainThread run start" << std::endl;
-    appIO.run();
-    tout() << "MainThread run done" << std::endl;
-  }
-  prodThread.join();
+  tout() << "MainThread run start" << std::endl;
+  appCtx.run();
+  tout() << "MainThread run done" << std::endl;
+
+  srvCtx.join(); // the service thread stops here
   tout() << "========= MAIN CALLBACK END   =========" << std::endl;
   return 42;
 }
 
 int mainFuture() {
   tout() << "========= MAIN FUTURE START =========" << std::endl;
-  asio::io_context prodIO;
-  boost::thread prodThread;
-  {
-    // ensure the producer io context doesn't exit
-    auto prodWork = asio::make_work_guard(prodIO);
+  asio::thread_pool srvCtx{1};
 
-    prodThread = boost::thread{[&prodIO] {
-      tout() << "ProdThread run start" << std::endl;
-      prodIO.run();
-      tout() << "ProdThread run done" << std::endl;
-    }};
+  // Print the thread id of the service thread.
+  asio::post(srvCtx, std::packaged_task<void()>([]() {
+    tout() << "ServiceThread run start" << std::endl;
+  })).wait();
 
-    auto impl = Impl(prodIO);
+  auto service = AsyncService(srvCtx.get_executor());
 
-    tout() << "MainThread run start" << std::endl;
-    try {
-      auto fut = impl.async_simple_function(earlyFailureSimulator, 1, 2, asio::use_future);
-      fut.wait();
-      auto ret = fut.get();
-      tout() << "MainThread after calling impl"                         << std::endl
-             << " ExampleReturnValue1 "  << std::get<0>(ret) << std::endl
-             << " ExampleReturnValue2 "  << std::get<1>(ret) << std::endl;
-    } catch (boost::system::system_error const &e) {
-      tout() << "MainThread echo Exception: " << e.what() << std::endl;
-      // tout() << "MainThread echo Exception: " << e.code().message().c_str() << std::endl;
-    }
-    tout() << "MainThread run done" << std::endl;
+  tout() << "MainThread run start" << std::endl;
+  try {
+    auto fut = service.async_simple_function(earlyFailureSimulator, 1, 2, asio::use_future);
+    fut.wait();
+    auto ret = fut.get();
+    tout() << "MainThread after calling impl"                         << std::endl
+           << " ExampleReturnValue1 "  << std::get<0>(ret) << std::endl
+           << " ExampleReturnValue2 "  << std::get<1>(ret) << std::endl;
+  } catch (boost::system::system_error const &e) {
+    tout() << "MainThread echo Exception: " << e.what() << std::endl;
+    // tout() << "MainThread echo Exception: " << e.code().message().c_str() << std::endl;
   }
-  prodThread.join();
+  tout() << "MainThread run done" << std::endl;
+
+  srvCtx.join(); // the service thread stops here
   tout() << "========= MAIN FUTURE END   =========" << std::endl;
   return 42;
 }

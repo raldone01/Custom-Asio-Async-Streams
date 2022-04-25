@@ -12,29 +12,31 @@ You should have received a copy of the GNU General Public License along with thi
 #include "Helpers.h"
 
 #include <coroutine>
+
 #include <boost/asio.hpp>
-#include <boost/asio/experimental/as_single.hpp>
-#include <boost/bind/bind.hpp>
 
 /**
  * As you can see the executor can change after calling co_await!!!!
  * When dealing with badly written async function this CAN ba a BIG issue!!!!
  * If you come across a badly behaved function you can just `co_await asio::post(bind_executor(correctExecutor, asio::use_awaitable));` to return to the correct executor.
+ *
+ * @param app Actually this parameter is redundant as it is the same as `co_await asio::this_coro::executor`.
  */
-asio::awaitable<int> mainCo(auto app, auto prod) {
-  auto to_app = bind_executor(app, asio::use_awaitable);
-  auto to_prod = bind_executor(prod, asio::use_awaitable);
+asio::awaitable<int> mainCo(auto app, auto srv) {
+  // bind the completion tokens to the appropriate executors
+  auto to_app = bind_executor(app, asio::use_awaitable); // this line is technically unnecessary as per default `asio::use_awaitable` binds to `co_await asio::this_coro::executor`
+  auto to_srv = bind_executor(srv, asio::use_awaitable);
 
   // swap executors a few time
   // NOTE:  In this example the thread_id changes when the executor changes.
   //        However, if both strands were part of the same thread_pool with one thread.
   //        The executor would still change but the thread_id would stay the same.
-  tout() << "MC on APPIO"  << std::endl;
-  co_await asio::post(to_prod); tout() << "MC on PRODIO" << std::endl;
-  co_await asio::post(to_app);  tout() << "MC on APPIO"  << std::endl;
-  co_await asio::post(to_prod); tout() << "MC on PRODIO" << std::endl;
-  co_await asio::post(to_prod); tout() << "MC on PRODIO" << std::endl; // the post in this line is a nop - no operation because we are already on the correct executor
-  co_await asio::post(to_app);  tout() << "MC on APPIO"  << std::endl;
+  tout() << "MC on appCtx"  << std::endl;
+  co_await asio::post(to_srv); tout() << "MC on srvCtx" << std::endl;
+  co_await asio::post(to_app); tout() << "MC on appCtx" << std::endl;
+  co_await asio::post(to_srv); tout() << "MC on srvCtx" << std::endl;
+  co_await asio::post(to_srv); tout() << "MC on srvCtx" << std::endl; // the post in this line is a nop - no operation because we are already on the correct executor
+  co_await asio::post(to_app); tout() << "MC on appCtx" << std::endl;
 
   co_return 42;
 }
@@ -47,15 +49,15 @@ int main() {
    * This is an execution_context.
    * This execution_context can mostly be implicitly be converted to an executor by asio.
    */
-  asio::io_context appIO;
+  asio::io_context appCtx;
   /**
    * This is also an execution_context.
    * This execution_context can mostly be implicitly be converted to an executor by asio.
    */
-  asio::thread_pool prodIO(1);
+  asio::thread_pool srvCtx{1};
   // Actually execution_contexts have a default executor.
   // In this case it enforces no execution order.
-  // If prodIO had more threads than its default executor might execute work concurrently without restrictions.
+  // If srvCtx had more threads than its default executor might execute work concurrently without restrictions.
 
   // To ensure our program behaves consistently, and we have no race conditions,
   // we create strands as soon as possible to avoid unnecessary complexities.
@@ -66,18 +68,24 @@ int main() {
   // It doesn't matter how many threads the underlying execution_context has
   // - a strand executes its work 'synchronously'. (You can compare it to a javascript promise chain.)
   // However, if the execution_context has the ability to concurrently execute it might still execute multiple DIFFERENT strands concurrently.
-  auto appStrand = make_strand(appIO);
-  auto prodStrand = make_strand(prodIO);
+  auto appStrand = make_strand(appCtx);
+  auto srvStrand = make_strand(srvCtx);
+
+  // Print the thread id of the service thread.
+  asio::post(asio::bind_executor(srvStrand, []() {
+    tout() << "ServiceThread run start" << std::endl;
+  }));
+
   auto fut = asio::co_spawn(appStrand, // the first argument sets the coroutines default executer. It can be accessed by using `co_await asio::this_coro::executor`.
-                 mainCo(appStrand, prodStrand), // Initializes the coroutine to run
+                 mainCo(appStrand, srvStrand), // Initializes the coroutine to run
                  asio::use_future // - Indicates that the coroutine returns a value and we would like it to be returned in the form of a std::future
                  // asio::detached - Indicates that the coroutine is not expected to return any value
                  );
 
   tout() << "MainThread run start" << std::endl;
-  appIO.run();
+  appCtx.run();
   tout() << "MainThread run done" << std::endl;
 
-  prodIO.join();
+  srvCtx.join(); // the service thread stops here
   return fut.get(); // gets the value or exception result from the coroutine
 }

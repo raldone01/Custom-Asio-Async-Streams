@@ -47,11 +47,16 @@ makeExe(CoroContextSwitching "examples/coro_context_switching.cpp")
 makeExe(CoroOutcomeReturn "examples/coro_outcome_return.cpp")
 target_link_libraries(CoroOutcomeReturn PRIVATE Boost::outcome)
 
+add_compile_options(--enable-tls --enable-threads) # for thread local storage
 IF(CMAKE_BUILD_TYPE MATCHES DEBUG)
-    add_compile_options(-fno-omit-frame-pointer -ggdb3 -O0 --enable-tls) # clang -fcoroutines-ts -stdlib=libstdc++
+    add_compile_options(-fno-omit-frame-pointer -ggdb3 -O0) # clang -fcoroutines-ts -stdlib=libstdc++
     if(NOT WIN32)
         add_compile_options(-fsanitize=address)
         target_link_libraries(${target} asan)
         add_link_options(-fsanitize=address)
     endif()
 ENDIF(CMAKE_BUILD_TYPE MATCHES DEBUG)
+
+IF(WIN32)
+  add_compile_definitions(_WIN32_WINNT=0x0A00) # https://docs.microsoft.com/en-us/windows/win32/winprog/using-the-windows-headers?redirectedfrom=MSDN#macros-for-conditional-declarations
+ENDIF(WIN32)

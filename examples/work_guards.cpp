@@ -12,8 +12,9 @@ You should have received a copy of the GNU General Public License along with thi
 
 #include "Helpers.h"
 
-#include <boost/asio.hpp>
 #include <thread>
+
+#include <boost/asio.hpp>
 
 namespace asio = boost::asio;
 
@@ -24,37 +25,37 @@ namespace asio = boost::asio;
  * Also executor_work_guard has decoupled lifetime as a nifty feature. (`executor_work_guard.reset()`)
  */
 int main() {
-  asio::io_context workerIO;
-  std::thread workerThread;
+  asio::io_context srvCtx;
+  std::thread serviceThread;
   {
     // ensure the worker io context stands by until work is posted at a later time
     // one of the below is needed for the worker to execute work which one should I use?
-    auto prodWork = asio::make_work_guard(workerIO);
-    // prodWork.reset(); // can be cleared
-    // asio::any_io_executor prodWork2 = asio::prefer(workerIO.get_executor(), asio::execution::outstanding_work_t::tracked);
-    // prodWork2 = asio::any_io_executor{}; // can be cleared
-    // asio::any_io_executor prodWork3 = asio::require(workerIO.get_executor(), asio::execution::outstanding_work_t::tracked);
-    // prodWork3 = asio::any_io_executor{}; // can be cleared
+    auto srvWork = asio::make_work_guard(srvCtx);
+    // srvWork.reset(); // can be cleared
+    // asio::any_io_executor srvWork2 = asio::prefer(srvCtx.get_executor(), asio::execution::outstanding_work_t::tracked);
+    // srvWork2 = asio::any_io_executor{}; // can be cleared
+    // asio::any_io_executor srvWork3 = asio::require(srvCtx.get_executor(), asio::execution::outstanding_work_t::tracked);
+    // srvWork3 = asio::any_io_executor{}; // can be cleared
 
-    workerThread = std::thread{[&workerIO] {
+    serviceThread = std::thread{[&srvCtx] {
       tout() << "Worker run start" << std::endl;
-      workerIO.run();
+      srvCtx.run();
       tout() << "Worker run done" << std::endl;
     }};
-    asio::io_context appIO;
+    asio::io_context appCtx;
 
 
     tout() << "Main: run start" << std::endl;
 
     // schedule work here
     {
-      auto timer = asio::steady_timer{appIO};
+      auto timer = asio::steady_timer{appCtx};
       timer.expires_after(std::chrono::seconds(4));
-      timer.async_wait([&workerIO] (auto ec) {
+      timer.async_wait([&srvCtx] (auto ec) {
         if (ec == asio::error::operation_aborted)
           tout() << "Main: timer aborted" << std::endl;
         tout() << "Main: timer expired" << std::endl;
-        asio::post(workerIO.get_executor(), [] {
+        asio::post(srvCtx.get_executor(), [] {
           // This is never executed without a work guard.
           tout() << "Worker sent work done" << std::endl;
         });
@@ -62,10 +63,10 @@ int main() {
       });
     }
 
-    appIO.run();
+    appCtx.run();
     tout() << "Main run done" << std::endl;
   }
-  workerThread.join(); // wait for the worker to finish its posted work
+  serviceThread.join(); // wait for the worker to finish its posted work
   tout() << "MainFunc exit" << std::endl;
   return 0;
 }

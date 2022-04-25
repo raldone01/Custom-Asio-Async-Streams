@@ -75,6 +75,9 @@ Shows how to use the new c++20 iterator concepts defined in the <iterator> heade
 * SimpleAsyncFunction: Implement one with `co_spawn`
 * NewEx: Show how to store completion handlers in a vector
 * NewEx: Show how the system executor trap is dangerous and how to exit it cleanly (use query)
+* NewEx: Show how to use and implement cancellation in custom async functions.
+* Revisit work_guards - Create a proper work guard example
+* NewEx: Show how to use captured_self to control lifetimes.
 
 === Questions
 * When is the first argument of `post, dispatch, defer` ever useful?

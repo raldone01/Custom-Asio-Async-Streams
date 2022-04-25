@@ -7,9 +7,10 @@ You should have received a copy of the GNU General Public License along with thi
 #include "AsyncReadStreamDemo.h"
 
 #include <coroutine>
+#include <thread>
+
 #include <boost/asio/experimental/as_single.hpp>
 #include <boost/bind/bind.hpp>
-#include <boost/thread/thread.hpp>
 
 using namespace my;
 
@@ -44,12 +45,12 @@ asio::awaitable<void> mainCo(asio::io_context &appIO, Producer & prod) {
 
 int main() {
   asio::io_context prodIO;
-  boost::thread prodThread;
+  std::thread prodThread;
   {
     // ensure the producer io context doesn't exit
     auto prodWork = asio::make_work_guard(prodIO);
 
-    prodThread = boost::thread{[&prodIO] {
+    prodThread = std::thread{[&prodIO] {
       tout() << "ProdThread run start" << std::endl;
       prodIO.run();
       tout() << "ProdThread run done" << std::endl;

@@ -10,10 +10,10 @@ You should have received a copy of the GNU General Public License along with thi
 
 #include <iostream>
 #include <thread>
-#include <coroutine>
+#include <optional>
+
 #include <boost/asio.hpp>
 #include <boost/outcome.hpp>
-#include <optional>
 
 namespace outcome = boost::outcome_v2;
 namespace asio = boost::asio;
@@ -38,29 +38,29 @@ auto awaitable2_func(bool doThrow) -> asio::awaitable<void> {
 }
 
 /**
- * You can work around the default constructible issue by using a std::optional.
+ * You can work around the default constructive issue by using a std::optional.
  */
 auto awaitable_wrapper_func(bool doThrow) -> asio::awaitable<std::optional<outcome::result<int>>> {
   co_return co_await awaitable_func(doThrow);
 }
 
 int main() {
-  asio::io_context appIO;
+  asio::io_context appCtx;
 
   // Show that calling awaitable_func from another coroutine is fine
-  asio::co_spawn(appIO, awaitable2_func(false), asio::detached);
-  asio::co_spawn(appIO, awaitable2_func(true), asio::detached);
+  asio::co_spawn(appCtx, awaitable2_func(false), asio::detached);
+  asio::co_spawn(appCtx, awaitable2_func(true), asio::detached);
 
   // use the workaround like this
-  auto fut = asio::co_spawn(appIO, awaitable_wrapper_func(false), asio::use_future);
-  appIO.run();
+  auto fut = asio::co_spawn(appCtx, awaitable_wrapper_func(false), asio::use_future);
+  appCtx.run();
   // need to get value twice to unpack the optional first
   std::cout << "From wrapper " << fut.get().value().value() << std::endl;
 
   std::cout << "Show issues" << std::endl;
-  // Now the reason why co_spawn requires default constructible return values on await-ables
+  // Now the reason why co_spawn requires default constructive return values on await-ables
   for (bool it : {false, true})
-    asio::co_spawn(appIO, awaitable_wrapper_func(it), [it](
+    asio::co_spawn(appCtx, awaitable_wrapper_func(it), [it](
       std::exception_ptr e,
       std::optional<outcome::result<int>> ret // this needs to hold some value even when the awaitable didn't return anything
     ) {
@@ -78,8 +78,8 @@ int main() {
         std::cout << "got val " << ret.value().value() << std::endl;
       std::cout << "handler END doThrow: " << it << std::endl;
     });
-  appIO.restart();
-  appIO.run();
+  appCtx.restart();
+  appCtx.run();
 
   return 42;
 }
