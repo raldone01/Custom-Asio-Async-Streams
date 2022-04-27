@@ -28,7 +28,8 @@ If you want to build this project you should define the `CPM_SOURCE_CACHE` env v
 
 === CoroContextSwitching
 
-Shows off how you can easily switch between execution_context using co_await and post.
+Shows off how you can easily switch between executors (threads/strands/execution_contexts) using `co_await` and `post`.
+
 Also shows how to make the `int main()` into a `asio::awaitable<int> mainCo()` coroutine.
 This is comparable to how you would make `node.js` asynchronous.
 
