@@ -32,6 +32,12 @@ Shows off how you can easily switch between execution_context using co_await and
 Also shows how to make the `int main()` into a `asio::awaitable<int> mainCo()` coroutine.
 This is comparable to how you would make `node.js` asynchronous.
 
+=== AsyncCalls
+
+Shows off how to use different completion tokens to call
+various async function signatures.
+Shows how to handle exceptions and error_codes properly.
+
 === SimpleAsyncFunction
 
 Shows off how to write standalone async functions.
@@ -78,6 +84,8 @@ Shows how to use the new c++20 iterator concepts defined in the <iterator> heade
 * NewEx: Show how to use and implement cancellation in custom async functions.
 * Revisit work_guards - Create a proper work guard example
 * NewEx: Show how to use captured_self to control lifetimes.
+* Everywhere: Move completion handler before invoking
+* AsyncCalls: Finish and add comments.
 
 === Questions
 * When is the first argument of `post, dispatch, defer` ever useful?

@@ -60,8 +60,14 @@ public:
    */
   template<asio::completion_token_for<async_return_function> CompletionToken>
   auto async_coro_function(bool earlyFailure, uint32_t param1, uint32_t param2, CompletionToken && token) {
-    return asio::co_spawn(this->strand, [] () -> asio::awaitable<std::tuple<double, double>> {
-      co_return std::make_tuple(0.0, 0.0);
+    return asio::co_spawn(this->strand, [&, earlyFailure, param1, param2] () -> asio::awaitable<std::tuple<double, double>> {
+      const constexpr auto TAG = "AsyncCoroFunction";
+
+      tout(TAG) << "Inside";
+      if (earlyFailure)
+        throw asio::error::bad_descriptor;
+      tout(TAG) << "Work";
+      co_return { param1 + param2, param2 };
     }, token);
   }
 
@@ -133,7 +139,7 @@ asio::awaitable<int> mainCo(auto & appIO, auto &impl) {
     tout() << "MC echo Exception: " << e.what() << std::endl;
     // tout() << "MC echo Exception: " << e.code().message().c_str() << std::endl;
   }
-  co_return 42;
+  co_return 0;
 }
 
 int mainCoroutine() {
@@ -156,7 +162,7 @@ int mainCoroutine() {
 
   srvCtx.join(); // the service thread stops here
   tout() << "========= MAIN COROUTINE END   =========" << std::endl;
-  return 42;
+  return fut.get();
 }
 
 int mainCallback() {
@@ -189,7 +195,7 @@ int mainCallback() {
 
   srvCtx.join(); // the service thread stops here
   tout() << "========= MAIN CALLBACK END   =========" << std::endl;
-  return 42;
+  return 0;
 }
 
 int mainFuture() {
@@ -219,12 +225,12 @@ int mainFuture() {
 
   srvCtx.join(); // the service thread stops here
   tout() << "========= MAIN FUTURE END   =========" << std::endl;
-  return 42;
+  return 0;
 }
 
 int main() {
   mainCoroutine();
   mainCallback();
   mainFuture();
-  return 42;
+  return 0;
 }

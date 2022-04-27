@@ -15,6 +15,7 @@
             <excludedPath local="true" path="$PROJECT_DIR$/cmake-build-debug-clang" />
             <excludedPath local="true" path="$PROJECT_DIR$/cmake-build-debug-wsl" />
             <excludedPath local="true" path="$PROJECT_DIR$/cmake-build-debug-wsl" />
+            <excludedPath local="true" path="$PROJECT_DIR$/cmake-build-debug-visual-studio" />
             <excludedPath local="true" path="$PROJECT_DIR$/cmake-build-debug-remote-host" />
             <excludedPath local="true" path="$PROJECT_DIR$/cmake-build-debug-remote-host" />
           </excludedPaths>

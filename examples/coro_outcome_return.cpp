@@ -81,5 +81,5 @@ int main() {
   appCtx.restart();
   appCtx.run();
 
-  return 42;
+  return 0;
 }

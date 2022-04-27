@@ -20,12 +20,12 @@ You should have received a copy of the GNU General Public License along with thi
  * When dealing with badly written async function this CAN ba a BIG issue!!!!
  * If you come across a badly behaved function you can just `co_await asio::post(bind_executor(correctExecutor, asio::use_awaitable));` to return to the correct executor.
  *
- * @param app Actually this parameter is redundant as it is the same as `co_await asio::this_coro::executor`.
+ * @param appStrand Actually this parameter is redundant as it is the same as `co_await asio::this_coro::executor`.
  */
-asio::awaitable<int> mainCo(auto app, auto srv) {
+asio::awaitable<int> mainCo(auto appStrand, auto srvStrand) {
   // bind the completion tokens to the appropriate executors
-  auto to_app = bind_executor(app, asio::use_awaitable); // this line is technically unnecessary as per default `asio::use_awaitable` binds to `co_await asio::this_coro::executor`
-  auto to_srv = bind_executor(srv, asio::use_awaitable);
+  auto to_app = bind_executor(appStrand, asio::use_awaitable); // this line is technically unnecessary as per default `asio::use_awaitable` binds to `co_await asio::this_coro::executor`
+  auto to_srv = bind_executor(srvStrand, asio::use_awaitable);
 
   // change the executor a few time
   // NOTE:  In this example the thread_id changes when the executor changes.
@@ -38,7 +38,7 @@ asio::awaitable<int> mainCo(auto app, auto srv) {
   co_await asio::post(to_srv); tout() << "MC on srvExe" << std::endl; // the post in this line is a nop - no operation because we are already on the correct executor
   co_await asio::post(to_app); tout() << "MC on appExe" << std::endl;
 
-  co_return 42;
+  co_return 0;
 }
 
 /**

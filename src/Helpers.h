@@ -9,12 +9,14 @@
 
 #include <fmt/format.h>
 
-inline std::osyncstream tout() {
+inline std::osyncstream tout(const std::string & tag = "") {
   auto hash = std::hash<std::thread::id>{}(std::this_thread::get_id());
   auto hashStr = fmt::format("T{:04X} ", hash >> (sizeof(hash) - 2) * 8); // only display 2 bytes
   auto stream = std::osyncstream(std::cout);
 
   stream << hashStr;
+  if (not tag.empty())
+    stream << tag << " ";
   return stream;
 }
 

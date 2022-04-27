@@ -71,5 +71,5 @@ int main() {
   }
   prodThread.join();
   tout() << "MainFunc exit" << std::endl;
-  return 42;
+  return 0;
 }
