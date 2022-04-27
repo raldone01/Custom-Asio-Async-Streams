@@ -27,16 +27,16 @@ asio::awaitable<int> mainCo(auto app, auto srv) {
   auto to_app = bind_executor(app, asio::use_awaitable); // this line is technically unnecessary as per default `asio::use_awaitable` binds to `co_await asio::this_coro::executor`
   auto to_srv = bind_executor(srv, asio::use_awaitable);
 
-  // swap executors a few time
+  // change the executor a few time
   // NOTE:  In this example the thread_id changes when the executor changes.
   //        However, if both strands were part of the same thread_pool with one thread.
   //        The executor would still change but the thread_id would stay the same.
-  tout() << "MC on appCtx"  << std::endl;
-  co_await asio::post(to_srv); tout() << "MC on srvCtx" << std::endl;
-  co_await asio::post(to_app); tout() << "MC on appCtx" << std::endl;
-  co_await asio::post(to_srv); tout() << "MC on srvCtx" << std::endl;
-  co_await asio::post(to_srv); tout() << "MC on srvCtx" << std::endl; // the post in this line is a nop - no operation because we are already on the correct executor
-  co_await asio::post(to_app); tout() << "MC on appCtx" << std::endl;
+  tout() << "MC on appExe"  << std::endl;
+  co_await asio::post(to_srv); tout() << "MC on srvExe" << std::endl;
+  co_await asio::post(to_app); tout() << "MC on appExe" << std::endl;
+  co_await asio::post(to_srv); tout() << "MC on srvExe" << std::endl;
+  co_await asio::post(to_srv); tout() << "MC on srvExe" << std::endl; // the post in this line is a nop - no operation because we are already on the correct executor
+  co_await asio::post(to_app); tout() << "MC on appExe" << std::endl;
 
   co_return 42;
 }
