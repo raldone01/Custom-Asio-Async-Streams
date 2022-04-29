@@ -27,18 +27,25 @@ asio::awaitable<void> mainCo(asio::io_context &appIO, Producer<T> & prod) {
 
     // Create a read stream from our producer
     auto readStream = prod.makeMyAsyncReadStream(appStrand, 0, 10);
-    std::vector<std::byte> dataBackend;
-    auto dynBuffer = asio::dynamic_buffer(dataBackend, 50);
-    auto [ec, n] = co_await asio::async_read(readStream, dynBuffer, asio::experimental::as_single(asio::use_awaitable));
-    // WARNING after co_await calls your execution_context might have changed
-    // that's why the MyAsyncReadStream takes an executor as an argument in its constructor to ensure that the
-    // execution_context doesn't change accidentally
 
-    tout() << "MC read done: bytes: "
-           << n
-           << " ec: "
-           << ec.message()
-           << std::endl;
+    for (size_t it = 0; it < 2; it++) {
+      std::vector<std::byte> dataBackend;
+      auto dynBuffer = asio::dynamic_buffer(dataBackend, 50);
+      auto [ec, n] = co_await asio::async_read(readStream, dynBuffer, asio::experimental::as_single(asio::use_awaitable));
+      // WARNING after co_await calls your execution_context might have changed
+      // that's why the MyAsyncReadStream takes an executor as an argument in its constructor to ensure that the
+      // execution_context doesn't change accidentally
+
+      tout() << "MC read done: bytes: "
+             << n
+             << " ec: "
+             << ec.message()
+             << std::endl;
+
+      auto timer = asio::steady_timer(appIO);
+      timer.expires_after(std::chrono::milliseconds(2500)); // wait for new data to arrive
+      co_await timer.async_wait(asio::use_awaitable);
+    }
   } catch (std::exception &e) {
     tout() << "MC echo Exception: " << e.what() << std::endl;
   }
