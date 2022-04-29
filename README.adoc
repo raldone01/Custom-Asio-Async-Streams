@@ -41,12 +41,9 @@ Shows how to handle exceptions and error_codes properly.
 
 === SimpleAsyncFunction
 
-Shows off how to write standalone async functions.
-It also shows how to call the via coroutines, callbacks and futures.
-All the shown calling patters also apply to the CustomAsioReadStream and the CustomAsioWriteStream.
+Shows off how to write a basic service with its own executor and its own async functions. The service implements two async functions which do the same thing. One depends on coroutines to be available. The other can be implemented in cpp17.
 
-Checkout CustomAsioReadStreams before looking at this example.
-It should be used when using a stream is overkill and all data is available instantly.
+It should be used when using an AsyncStream is overkill and all data is available instantly.
 
 === WorkGuards
 
@@ -76,23 +73,17 @@ Shows how to use the new c++20 iterator concepts defined in the <iterator> heade
 === TODO
 * CustomStreams: Check if get_associated_executor can be used in the custom streams example
 * CustomStreams: use bind_executor in every post,defer,dispatch statement
-* SimpleAsyncFunction: Seperately show how to call async functions
-* SimpleAsyncFunction: Implement one with `async_initiate`
-* SimpleAsyncFunction: Implement one with `async_result`
-* SimpleAsyncFunction: Implement one with `co_spawn`
-* NewEx: Show how to store completion handlers in a vector
-* NewEx: Show how the system executor trap is dangerous and how to exit it cleanly (use query)
-* NewEx: Show how to use and implement cancellation in custom async functions.
+* Everywhere: Move completion handler before invoking
 * Revisit work_guards - Create a proper work guard example
 * NewEx: Show how to use captured_self to control lifetimes.
-* Everywhere: Move completion handler before invoking
-* AsyncCalls: Finish and add comments.
+* NewEx: Show how to use and implement cancellation in custom async functions.
+* NewEx: Show how to store completion handlers in a vector
+* NewEx: Show how the system executor is dangerous and how to exit it cleanly (use query)
 
 === Questions
 * When is the first argument of `post, dispatch, defer` ever useful?
  It's just a BAD FALLBACK when no bound executor is found. And if one is found it first post empty work to the FALLBACK and the dispatches from there to the associated executor. When is that EVER useful? post.hpp:63 https://www.boost.org/doc/libs/1_79_0/doc/html/boost_asio/reference/get_associated_executor/overload3.html
 * Additionally, the naming of the asio parameters is not really intuitive, and it's lacking parameter descriptions of the overloads of very popular functions `post, dispatch, defer`.
-* Does an `asio::awaitable` constitute work? Is it work?
 * Biggest issue for beginner is the lack of examples and documentation.
   Even parameter names or simple sentences explaining one possible use case would be very helpful. Especially parameter descriptions. Also maybe note what the different overloads are for.
 

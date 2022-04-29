@@ -19,13 +19,16 @@ asio::awaitable<int> mainCo() {
   auto exe = co_await asio::this_coro::executor;
   auto use_awaitable = asio::bind_executor(exe, asio::use_awaitable);
   auto as_single = asio::experimental::as_single(use_awaitable);
+  /**
+   * as_tuple can be used to convert thrown exceptions into `std::exception_ptr`.
+   */
   auto as_tuple  = asio::experimental::as_tuple(use_awaitable);
   auto use_future = asio::use_future;
 
   /**
    * use use_awaitable
    *
-   * use_awaitable throws if the underlying function throws
+   * use_awaitable throws if the underlying function throws.
    */
   tout() << std::endl;
   tout() << std::endl;
@@ -105,7 +108,204 @@ asio::awaitable<int> mainCo() {
   }
 
   /**
+   * use use_future
+   *
+   * use_future is useful when mixing coroutines and synchronous code.
+   * Warning incorrect use can lead to deadlocks.
+   */
+  tout() << "=== use_future" << std::endl;
+  {
+    // async_0_returns_ex_fun
+    {
+      auto TAG = "async_0_returns_ex_fun";
+
+      async_0_returns_ex_fun(false, 12, use_future).get(); // no return value defined
+
+      try {
+        async_0_returns_ex_fun(true, 12, use_future).get();
+      } catch(boost::system::error_code const &e) {
+        tout(TAG) << "Ec: "  << e.what() << std::endl;
+      }
+
+      tout() << std::endl;
+    }
+    // async_0_returns_ec_fun
+    {
+      auto TAG = "async_0_returns_ec_fun";
+
+      async_0_returns_ec_fun(false, 12, use_future).get(); // no return value defined
+
+      auto ret = async_0_returns_ec_fun(true, 12, use_future).get();
+      tout(TAG) << "Ec: "  << ret.what() << std::endl;
+
+      tout() << std::endl;
+    }
+    // async_1_returns_ex_fun
+    {
+      auto TAG = "async_1_returns_ex_fun";
+
+      auto ret = async_1_returns_ex_fun(false, 12, use_future).get(); // returns double
+      tout(TAG) << "Ret: " << ret << std::endl;
+
+      try {
+        auto ret1 = async_1_returns_ex_fun(true, 12, use_future).get();
+      } catch(boost::system::error_code const &e) {
+        tout(TAG) << "Ec: "  << e.what() << std::endl;
+      }
+
+      tout() << std::endl;
+    }
+    // async_1_returns_ec_fun
+    {
+      auto TAG = "async_1_returns_ec_fun";
+
+      auto ret = async_1_returns_ec_fun(false, 12, use_future).get(); // returns [boost::system::error_code, double]
+      tout(TAG) << "Ec: "  << std::get<0>(ret).what() << std::endl;
+      tout(TAG) << "Ret: " << std::get<1>(ret)        << std::endl;
+
+      auto ret1 = async_1_returns_ec_fun(true, 12, use_future).get();
+      tout(TAG) << "Ec: "  << std::get<0>(ret1).what()  << std::endl;
+      tout(TAG) << "Ret: " << std::get<1>(ret1)         << std::endl;
+
+      tout() << std::endl;
+    }
+    // async_2_returns_ec_fun
+    {
+      auto TAG = "async_2_returns_ex_fun";
+
+      auto ret = async_2_returns_ex_fun(false, 12, use_future).get(); // returns [double, double]
+      tout(TAG) << "Ret1: " << std::get<0>(ret)  << std::endl;
+      tout(TAG) << "Ret2: " << std::get<1>(ret)  << std::endl;
+
+      try {
+        auto ret1 = async_2_returns_ex_fun(true, 12, use_future).get();
+      } catch(boost::system::error_code const &e) {
+        tout(TAG) << "Ec: " << e.what() << std::endl;
+      }
+
+      tout() << std::endl;
+    }
+    tout() << std::endl;
+  }
+
+  /**
+   * use as_tuple
+   *
+   * as_tuple is useful when you need to capture exceptions and are unable to catch them.
+   *
+   * There seems to be only one observable difference between as_single and as_tuple.
+   * In the async_0_returns_ex_fun test case they differ.
+   * as_single does not provide a `std::exception_ptr`.
+   */
+  tout() << "=== as_tuple" << std::endl;
+  {
+    // async_0_returns_ex_fun
+    {
+      auto TAG = "async_0_returns_ex_fun";
+
+      auto [ex] = co_await async_0_returns_ex_fun(false, 12, as_tuple); // [std::exception_ptr]
+      assert(ex == nullptr); // no exception thrown
+
+      auto [ex1] = co_await async_0_returns_ex_fun(true, 12, as_tuple); // [std::exception_ptr]
+      try {
+        std::rethrow_exception(ex1);
+      } catch(boost::system::error_code const &e) {
+        tout(TAG) << "Ec: " << e.what() << std::endl;
+      }
+
+      tout() << std::endl;
+    }
+    // async_0_returns_ec_fun
+    {
+      auto TAG = "async_0_returns_ec_fun";
+
+      auto [ex, ret] = co_await async_0_returns_ec_fun(false, 12, as_single); // returns [std::exception_ptr, boost::system::error_code]
+      assert(ex == nullptr); // no exception thrown
+      assert(ret == boost::system::error_code{}); // no error returned
+
+      auto [ex1, ret1] = co_await async_0_returns_ec_fun(true, 12, as_single);
+      assert(ex1 == nullptr); // no exception thrown
+      tout(TAG) << "Ec: " << ret1 << std::endl;
+
+      tout() << std::endl;
+    }
+    // async_1_returns_ex_fun
+    {
+      auto TAG = "async_1_returns_ex_fun";
+
+      auto [ex, ret] = co_await async_1_returns_ex_fun(false, 12, as_single); // returns [std::exception_ptr, double]
+      assert(ex == nullptr); // no exception thrown
+      tout(TAG) << "Ret: " << ret << std::endl;
+
+      auto [ex1, ret1] = co_await async_1_returns_ex_fun(true, 12, as_single);
+      try {
+        std::rethrow_exception(ex1);
+      } catch(boost::system::error_code const &e) {
+        tout(TAG) << "Ec: "  << e.what()          << std::endl;
+        tout(TAG) << "Ret: " << ret1 << std::endl; // this value has been default constructed for us
+      }
+
+      tout() << std::endl;
+    }
+    // async_1_returns_ec_fun
+    {
+      auto TAG = "async_1_returns_ec_fun";
+
+      auto [ex, ret] = co_await async_1_returns_ec_fun(false, 12, as_single); // returns [std::exception_ptr, [ec, double]]
+      assert(ex == nullptr); // no exception thrown
+      tout(TAG) << "Ec: "  << std::get<0>(ret).what() << std::endl;
+      tout(TAG) << "Ret: " << std::get<1>(ret)        << std::endl;
+
+      auto [ex1, ret1] = co_await async_1_returns_ec_fun(true, 12, as_single);
+      assert(ex1 == nullptr); // no exception thrown
+      tout(TAG) << "Ec: "  << std::get<0>(ret1).what() << std::endl;
+      tout(TAG) << "Ret: " << std::get<1>(ret1)        << std::endl;
+
+      tout() << std::endl;
+//      auto TAG = "async_1_returns_ec_fun";
+//
+//      auto [ex, ec, ret] = co_await async_1_returns_ec_fun(false, 12, as_single); // returns [std::exception_ptr, ec, double]
+//      assert(ex == nullptr); // no exception thrown
+//      tout(TAG) << "Ec: "  << ec.what() << std::endl;
+//      tout(TAG) << "Ret: " << ret       << std::endl;
+//
+//      auto [ex1, ec1, ret1] = co_await async_1_returns_ec_fun(true, 12, as_single);
+//      assert(ex1 == nullptr); // no exception thrown
+//      tout(TAG) << "Ec: "  << ec1.what() << std::endl;
+//      tout(TAG) << "Ret: " << ret1       << std::endl;
+//
+//      tout() << std::endl;
+    }
+    // async_2_returns_ec_fun
+    {
+      auto TAG = "async_2_returns_ex_fun";
+
+      auto [ex, ret] = co_await async_2_returns_ex_fun(false, 12, as_single); // returns [std::exception_ptr, [double, double]]
+      assert(ex == nullptr); // no exception thrown
+      tout(TAG) << "Ret1: " << std::get<0>(ret) << std::endl;
+      tout(TAG) << "Ret2: " << std::get<1>(ret) << std::endl;
+
+      auto [ex1, ret1] = co_await async_2_returns_ex_fun(true, 12, as_single);
+      try {
+        std::rethrow_exception(ex1);
+      } catch(boost::system::error_code const &e) {
+        tout(TAG) << "Ec: "   << e.what()          << std::endl;
+        tout(TAG) << "Ret1: " << std::get<0>(ret1) << std::endl; // this value has been default constructed for us
+        tout(TAG) << "Ret2: " << std::get<1>(ret1) << std::endl; // this value has been default constructed for us
+      }
+
+      tout() << std::endl;
+    }
+    tout() << std::endl;
+  }
+
+  /**
    * use as_single
+   *
+   * I have found no useful application for this.
+   *
+   * Because of the first test case as_single is not suitable for use in nothrow applications.
+   * Use as_tuple instead.
    *
    * as_single returns a tuple<std::exception_ptr, YOUR_RETURN_TYPE> with two members.
    * The first item is a std::exception_ptr.
@@ -175,8 +375,8 @@ asio::awaitable<int> mainCo() {
 
       auto [ex1, ret1] = co_await async_1_returns_ec_fun(true, 12, as_single);
       assert(ex1 == nullptr); // no exception thrown
-      tout(TAG) << "Ec: "  << std::get<0>(ret).what() << std::endl;
-      tout(TAG) << "Ret: " << std::get<1>(ret)        << std::endl;
+      tout(TAG) << "Ec: "  << std::get<0>(ret1).what() << std::endl;
+      tout(TAG) << "Ret: " << std::get<1>(ret1)        << std::endl;
 
       tout() << std::endl;
     }
@@ -201,54 +401,6 @@ asio::awaitable<int> mainCo() {
       tout() << std::endl;
     }
     tout() << std::endl;
-  }
-
-  // TODO: use as_tuple
-  {
-    // async_0_returns_ex_fun
-    {
-
-    }
-    // async_0_returns_ec_fun
-    {
-
-    }
-    // async_1_returns_ex_fun
-    {
-
-    }
-    // async_1_returns_ec_fun
-    {
-
-    }
-    // async_2_returns_ec_fun
-    {
-
-    }
-  }
-
-  // TODO: use as_future
-  {
-    // async_0_returns_ex_fun
-    {
-
-    }
-    // async_0_returns_ec_fun
-    {
-
-    }
-    // async_1_returns_ex_fun
-    {
-
-    }
-    // async_1_returns_ec_fun
-    {
-
-    }
-    // async_2_returns_ec_fun
-    {
-
-    }
   }
 
   tout("MainCo") << "Normal exit" << std::endl;

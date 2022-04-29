@@ -11,9 +11,9 @@ include(cmake/CPM.cmake)
 # set CPM_SOURCE_CACHE env var
 CPMAddPackage(
   NAME Boost
-  VERSION 1.78.0
+  VERSION 1.79.0
   GITHUB_REPOSITORY "boostorg/boost"
-  GIT_TAG "boost-1.78.0"
+  GIT_TAG "boost-1.79.0"
 )
 CPMAddPackage(
   NAME fmt
