@@ -39,7 +39,7 @@ Shows off how to use different completion tokens to call
 various async function signatures.
 Shows how to handle exceptions and error_codes properly.
 
-=== SimpleAsyncFunction
+=== SimpleAsyncService
 
 Shows off how to write a basic service with its own executor and its own async functions. The service implements two async functions which do the same thing. One depends on coroutines to be available. The other can be implemented in cpp17.
 
