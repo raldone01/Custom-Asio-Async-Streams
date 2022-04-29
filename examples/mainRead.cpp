@@ -18,14 +18,15 @@ using namespace my;
  * This is the actual main application loop.
  * It uses a new c++20 coroutine.
  */
-asio::awaitable<void> mainCo(asio::io_context &appIO, Producer & prod) {
+template<typename T>
+asio::awaitable<void> mainCo(asio::io_context &appIO, Producer<T> & prod) {
   try {
     // create strand to use for async operations (might not actually be needed due to the nature of coroutines.)
     // Instead, the appIO may be used directly.
-    auto appStrand = asio::io_context::strand{appIO};
+    auto appStrand = asio::make_strand(appIO);
 
     // Create a read stream from our producer
-    auto readStream = MyAsyncReadStream(appStrand, prod, 0, 10);
+    auto readStream = prod.makeMyAsyncReadStream(appStrand, 0, 10);
     std::vector<std::byte> dataBackend;
     auto dynBuffer = asio::dynamic_buffer(dataBackend, 50);
     auto [ec, n] = co_await asio::async_read(readStream, dynBuffer, asio::experimental::as_single(asio::use_awaitable));
@@ -57,7 +58,7 @@ int main() {
     }};
     asio::io_context appIO;
 
-    auto prod = Producer{prodIO};
+    auto prod = Producer{prodIO.get_executor()};
 
     asio::co_spawn(appIO, mainCo(appIO, prod), asio::detached);
 

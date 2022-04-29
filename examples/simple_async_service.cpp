@@ -28,12 +28,12 @@ const constexpr auto earlyFailureSimulator = false;
  * This class represents some sort of service that allows data to be exchanged via async functions.
  */
 template <typename Executor>
+requires asio::is_executor<Executor>::value
 /**
  * We add this line to indicate that we do not support execution_contexts directly in the constructor.
  * If we were to support contexts we would have to add facilities to unpack executors from execution_contexts.
  * So to use this with an execution_context you just have to call `ctx.get_executor()` before passing it to the constructor.
  */
-// TODO: requires std::same_as<asio::is_executor<Executor>, std::true_type> /Boost/libs/asio/include/boost/asio/strand.hpp:445
 class AsyncService {
   asio::strand<Executor> strand;
 public:

@@ -21,7 +21,9 @@ namespace my {
     /**
      * This class represents the actual service producing the data that may be read asynchronously.
      */
-    class ProducerImpl : public std::enable_shared_from_this<ProducerImpl> {
+    template <typename Executor>
+    requires asio::is_executor<Executor>::value
+    class ProducerImpl : public std::enable_shared_from_this<ProducerImpl<Executor>> {
       // The public fields of this class are only visible to the Producer class and the AsyncXXXXXStream classes.
     public:
       /**
@@ -31,7 +33,7 @@ namespace my {
       /**
        * The strand used to avoid concurrent execution if the passed io context is run by multiple threads.
        */
-      asio::io_context::strand strand;
+      asio::strand<Executor> strand;
     private:
       /**
        * The generator used to modify the data.
@@ -104,7 +106,7 @@ namespace my {
        * This function does the same but allows the operation chain to be interrupted by the user by discarding the last Producer reference.
        */
       void veryExpensiveOperationAllowEarlyExit() {
-        auto captured_self = weak_from_this();
+        auto captured_self = this->weak_from_this();
         if (auto strong_self = captured_self.lock()) {
           ops++;
           produce();
@@ -124,13 +126,13 @@ namespace my {
       }
 
     public:
-      explicit ProducerImpl(asio::io_context &io) : strand{io}, timer{io} {}
+      explicit ProducerImpl(Executor && exe) : strand{asio::make_strand(exe)}, timer{exe.context()} {}
 
       /**
        * Do not invoke twice.
        */
       void startOps() {
-        asio::post(strand, [this, captured_self = shared_from_this()] {
+        asio::post(strand, [this, captured_self = this->shared_from_this()] {
           // Choose if the operations may be stopped prematurely by the user.
           // veryExpensiveOperationAllowEarlyExit();
           veryExpensiveOperation(captured_self);
@@ -150,52 +152,18 @@ namespace my {
   using namespace detail;
 
   /**
-   * This class is used by the user to indirectly interact with the ProducerImpl.
-   */
-  class Producer {
-    /**
-     * The friend declaration can be avoided by a stream factory function.
-     */
-    template<typename Executor> requires asio::is_executor<Executor>::value
-    friend
-    class MyAsyncReadStream;
-
-    std::shared_ptr<ProducerImpl> impl;
-    /**
-     * This work guard is necessary to ensure that the io context doesn't exit
-     */
-    asio::executor_work_guard<asio::io_context::strand> workGuard;
-  public:
-    /**
-     * Running the impl constructor synchronous is ok because at this point there is no possibility that anything is running concurrently.
-     */
-    explicit Producer(asio::io_context &io) : impl{std::make_shared<ProducerImpl>(io)}, workGuard{asio::make_work_guard(impl->strand)} {
-      impl->startOps(); // This function can not be called from the constructor because the shared pointer is not yet accessible.
-    }
-
-    ~Producer() {
-      // ensure the impl destructor is only called on the correct strand.
-      auto fut = asio::post(workGuard.get_executor(), std::packaged_task<void()>([impl = std::move(this->impl)]() { // it's important to move the impl here
-        // it's not necessary for this lambda to actually contain any code it's just here to run the destructor of the impl on the correct thread
-      }));
-      // fut.wait(); // uncomment this line to make the destructor synchron
-      tout() << "Prod destroyed" << std::endl;
-    }
-  };
-
-  /**
    * Stream specifications https://www.boost.org/doc/libs/1_78_0/libs/beast/doc/html/beast/concepts/streams.html
    * NOTE: It is possible to make it a bidirectional stream by adding an async_write_some function.
    * @tparam Executor The executor used to call the handlers of the AsyncStream.
    */
-  template<typename Executor> requires asio::is_executor<Executor>::value
+  template<typename CbExecutor, typename ProdExecutor>
   class MyAsyncReadStream {
     typedef void async_rw_handler(boost::system::error_code, size_t);
 
     /**
      * Holds the executor used to invoke the completion_handlers.
      */
-    Executor executor;
+    CbExecutor executor;
     /**
      * The current position in the producedData.
      * NOTE: This might not exist if you are implementing something that actually consumes the read data.
@@ -210,9 +178,9 @@ namespace my {
     /**
      * Hold a weak_ptr to the ProducerImpl.
      * MyAsyncReadStream behaves like a file descriptor.
-     * If the Producer object is destroyed by the user an error code will be returned on the next read.
+     * If the ProducerImpl object is destroyed by the user an error code will be returned on the next read.
      */
-    std::weak_ptr<ProducerImpl> implRef;
+    std::weak_ptr<ProducerImpl<ProdExecutor>> implRef;
   public:
 
     /**
@@ -222,16 +190,20 @@ namespace my {
      *
      * Alternatively a weak_ptr to ProducerImpl may be used though the destructor of MyAsyncReadStream would need the same logic as the Producer has right now.
      */
-    // std::shared_ptr<Producer> producerRef;
+    // std::shared_ptr<ProducerImpl<ProdExecutor>> implRef;
 
-    explicit MyAsyncReadStream(Executor exe, Producer &producer, size_t start, size_t end) : executor{exe}, head{start},
+    /**
+     * Do not invoke this constructor directly.
+     * Use Producer.makeMyAsyncReadStream instead.
+     */
+    explicit MyAsyncReadStream(CbExecutor & exe, std::shared_ptr<ProducerImpl<ProdExecutor>> &impl, size_t start, size_t end) : executor{exe}, head{start},
                                                                                              end{end},
-                                                                                             implRef{producer.impl} {}
+                                                                                             implRef{impl} {}
 
     /**
      * Needed by the stream specification.
      */
-    typedef Executor executor_type;
+    typedef CbExecutor executor_type;
 
     /**
      * Needed by the stream specification.
@@ -249,11 +221,11 @@ namespace my {
      * @return Depends on what token was chosen.
      */
     template<typename MutableBufferSequence,
-        asio::completion_token_for<async_rw_handler>
-        CompletionToken = typename asio::default_completion_token<Executor>::type>
+      asio::completion_token_for<async_rw_handler>
+      CompletionToken = typename asio::default_completion_token<CbExecutor>::type>
     requires asio::is_mutable_buffer_sequence<MutableBufferSequence>::value
     auto async_read_some(const MutableBufferSequence &buffer,
-                         CompletionToken &&token = typename asio::default_completion_token<Executor>::type()) {
+                         CompletionToken &&token = typename asio::default_completion_token<CbExecutor>::type()) {
       // the async_initiate function takes a lambda that receives a completion_handler to invoke to indicate the completion of the asynchronous operation
       // The lambda will be called in the same execution_context as the async_read_some function.
       // async_initiate directly calls the lambda we passed to it.
@@ -275,7 +247,7 @@ namespace my {
           asio::post(this->executor,
                      [completion_handler = std::forward<CompletionToken>(completion_handler)]() mutable {
                        tout() << "ARS bad_descriptor" << std::endl;
-                       completion_handler(asio::error::bad_descriptor, 0);
+                       std::move(completion_handler)(asio::error::bad_descriptor, 0);
                      });
           return;
         }
@@ -287,8 +259,8 @@ namespace my {
         // NOTE: Capture the completion_handler by reference! It is fine to capture this by reference since the user must ensure the streams lifetimes.
         // NOTE: Do NOT take the buffer by reference!
         asio::post(impl->strand, [this, buffer = std::move(buffer), impl,
-            resultWorkGuard = std::move(resultWorkGuard),
-            completion_handler = std::forward<CompletionToken>(completion_handler)]() mutable {
+          resultWorkGuard = std::move(resultWorkGuard),
+          completion_handler = std::forward<CompletionToken>(completion_handler)]() mutable {
           // We made it to the ProducerImpls execution_context! Yay
           tout() << "ARS performing read" << std::endl;
 
@@ -312,7 +284,7 @@ namespace my {
               // NOTE: DO NOT BLOCK HERE. This would block the ProducerImpl which you NEVER want to block.
               // Instead, you could save the stream(this) and the completion_handler to a vector in the ProducerImpl
               // and have it finish the read call the completion_handler.
-              // (Use post(stream->executor, lambda { completion_handler(ec, n); }); To ensure the correct execution_context.)
+              // (Use post(stream->executor, lambda { std::move(completion_handler)(ec, n); }); To ensure the correct execution_context.)
             }
 
             // Really copy the data into the buffer.
@@ -329,10 +301,48 @@ namespace my {
                      [err, it, completion_handler = std::forward<CompletionToken>(completion_handler)]() mutable {
                        tout() << "ARS invoking completion_handler: "
                               << err.message() << " " << it << std::endl;
-                       completion_handler(err, it);
+                       std::move(completion_handler)(err, it);
                      });
         });
       }, token);
+    }
+  };
+
+  /**
+   * This class is used by the user to indirectly interact with the ProducerImpl.
+   */
+  template <typename Executor>
+  requires asio::is_executor<Executor>::value
+  class Producer {
+
+    std::shared_ptr<ProducerImpl<Executor>> impl;
+    /**
+     * This work guard is necessary to ensure that the io context doesn't exit
+     */
+    asio::executor_work_guard<asio::strand<Executor>> workGuard;
+  public:
+    /**
+     * Running the impl constructor synchronous is ok because at this point there is no possibility that anything is running concurrently.
+     */
+    explicit Producer(Executor &&exe) : impl{std::make_shared<ProducerImpl<Executor>>(std::forward<Executor>(exe))}, workGuard{asio::make_work_guard(impl->strand)} {
+      impl->startOps(); // This function can not be called from the constructor because the shared pointer is not yet accessible.
+    }
+
+    template <typename CbExecutor>
+    auto makeMyAsyncReadStream(CbExecutor && exe, size_t start, size_t end,
+                               typename asio::constraint<
+                                 asio::is_executor<CbExecutor>::value || asio::execution::is_executor<CbExecutor>::value
+                               >::type = 0) {
+      return MyAsyncReadStream(std::forward<CbExecutor>(exe), this->impl, start, end);
+    }
+
+    ~Producer() {
+      // ensure the impl destructor is only called on the correct strand.
+      auto fut = asio::post(workGuard.get_executor(), std::packaged_task<void()>([impl = std::move(this->impl)]() { // it's important to move the impl here
+        // it's not necessary for this lambda to actually contain any code it's just here to run the destructor of the impl on the correct thread
+      }));
+      // fut.wait(); // uncomment this line to make the destructor synchron
+      tout() << "Prod destroyed" << std::endl;
     }
   };
 }
