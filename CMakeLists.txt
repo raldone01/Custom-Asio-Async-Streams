@@ -47,6 +47,7 @@ makeExe(CoroContextSwitching "examples/coro_context_switching.cpp")
 makeExe(CoroOutcomeReturn "examples/coro_outcome_return.cpp")
 target_link_libraries(CoroOutcomeReturn PRIVATE Boost::outcome)
 makeExe(AsyncCalls "examples/async_calls.cpp")
+makeExe(CoroAsyncStreams "examples/coro_async_streams.cpp")
 
 add_compile_options(--enable-tls --enable-threads) # for thread local storage
 IF(CMAKE_BUILD_TYPE MATCHES DEBUG)

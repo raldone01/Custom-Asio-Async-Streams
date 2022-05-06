@@ -236,6 +236,9 @@ namespace my {
         // does not meet the documented type requirements for a ReadHandler.
         BOOST_ASIO_READ_HANDLER_CHECK(CompletionToken, completion_handler) type_check;
 
+        // this will get the executor that asio has already conveniently associated with the completion handler.
+        auto assocExe = asio::get_associated_executor(completion_handler);
+
         tout() << "ARS async_init" << std::endl; // ARS = AsyncReadStream
         // Get a strong reference to the ProducerImpl.
         auto impl = this->implRef.lock();

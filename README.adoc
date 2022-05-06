@@ -33,17 +33,26 @@ Shows off how you can easily switch between executors (threads/strands/execution
 Also shows how to make the `int main()` into a `asio::awaitable<int> mainCo()` coroutine.
 This is comparable to how you would make `node.js` asynchronous.
 
-=== AsyncCalls
+=== CoroAsyncStreams
 
-Shows off how to use different completion tokens to call
-various async function signatures.
-Shows how to handle exceptions and error_codes properly.
+Shows how to implement a modern IO service and a modern IO object.
+In this example the AsyncStreams are implemented using `asio::awaitable`.
 
 === SimpleAsyncService
 
-Shows off how to write a basic service with its own executor and its own async functions. The service implements two async functions which do the same thing. One depends on coroutines to be available. The other can be implemented in cpp17.
+Builds on the foundation of the CoroAsyncStreams example.
 
-It should be used when using an AsyncStream is overkill and all data is available instantly.
+* The friend declaration is removed.
+* The MyAsyncStream forward declaration is removed.
+* The Service `shared_ptr` is hidden from the user.
+* The Service init call is hidden from the user.
+* Adds two new async functions which can be called directly without the need for an IO object. This is useful when using streams is overkill and all data is available instantly.
+
+=== AsyncCalls
+
+Shows how to use different completion tokens to call
+various async function signatures.
+Shows how to handle exceptions and error_codes properly.
 
 === WorkGuards
 
