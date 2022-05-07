@@ -20,23 +20,6 @@ namespace asio = boost::asio;
 
 namespace ModernIOService {
   namespace {
-    /**
-     * This function typedef indicates the RETURN type of the async_functions.
-     * (In this case all functions use the same function typedef because they all return the same values.)
-     *
-     * Note:  Avoid returning more than two values.
-     *        Although it is possible it's rather clunky.
-     *
-     *        Instead I recommend to only return an error_code and the value you want to return.
-     *        The types of the return values MUST be default constructive. (That requirements ironically prevents you from returning boost::outcomes. See the outcome example.)
-     *        If there is no possible error return value the error_code/ec parameter may be omitted.
-     *        You should only throw when the error is unrecoverable otherwise I advise to use error_codes.
-     */
-    typedef void (async_return_function)(boost::system::error_code ec, size_t buffer_in_size, size_t buffer_out_size);
-    //   typedef void (async_return_function)(boost::system::error_code ec, size_t exampleReturnValue1);  // use this to return one value with    error support
-    //   typedef void (async_return_function)(size_t exampleReturnValue1);                                // use this to return one value without error support
-    //   typedef void (async_return_function)(boost::system::error_code ec, struct yourReturnValues);     // use this if you have to return more than one value with error support
-
     template<typename Executor> requires my_is_executor<Executor>::value
     class ModernIOServiceImpl : public std::enable_shared_from_this<ModernIOServiceImpl<Executor>> {
       template<typename CallerExecutor, typename ModernIOService> requires my_is_executor<CallerExecutor>::value
@@ -131,6 +114,23 @@ namespace ModernIOService {
       }
 
       // region direct async functions
+
+      /**
+       * This function typedef indicates the RETURN type of the async_functions.
+       * (In this case all functions use the same function typedef because they all return the same values.)
+       *
+       * Note:  Avoid returning more than two values.
+       *        Although it is possible it's rather clunky.
+       *
+       *        Instead I recommend to only return an error_code and the value you want to return.
+       *        The types of the return values MUST be default constructive. (That requirements ironically prevents you from returning boost::outcomes. See the outcome example.)
+       *        If there is no possible error return value the error_code/ec parameter may be omitted.
+       *        You should only throw when the error is unrecoverable otherwise I advise to use error_codes.
+       */
+      typedef void (async_return_function)(boost::system::error_code ec, size_t buffer_in_size, size_t buffer_out_size);
+      //   typedef void (async_return_function)(boost::system::error_code ec, size_t exampleReturnValue1);  // use this to return one value with    error support
+      //   typedef void (async_return_function)(size_t exampleReturnValue1);                                // use this to return one value without error support
+      //   typedef void (async_return_function)(boost::system::error_code ec, struct yourReturnValues);     // use this if you have to return more than one value with error support
 
       /**
        * This function shows how to implement a async function with a completion token using `asio::async_initiate`.
@@ -390,14 +390,14 @@ namespace ModernIOService {
      * They are necessary to expose the public impl functions.
      */
 
-    template<asio::completion_token_for<async_return_function> CompletionToken>
+    template<asio::completion_token_for<typename ModernIOServiceImplType::async_return_function> CompletionToken>
     auto async_buffer_op_initiate(bool buffer_in_clear, bool buffer_out_clear,
                                   CompletionToken &&token) {
       assert(impl);
       return impl->async_buffer_op_initiate(buffer_in_clear, buffer_out_clear, std::forward<CompletionToken>(token));
     }
 
-    template<asio::completion_token_for<async_return_function> CompletionToken>
+    template<asio::completion_token_for<typename ModernIOServiceImplType::async_return_function> CompletionToken>
     auto async_buffer_op_coro(bool buffer_in_clear, bool buffer_out_clear,
                                   CompletionToken &&token) {
       assert(impl);
