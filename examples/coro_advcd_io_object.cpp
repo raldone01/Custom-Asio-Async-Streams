@@ -470,7 +470,7 @@ asio::awaitable<int> mainCo(T & srv_ctx) {
   {
     tout(TAG) << "before calling" << std::endl;
     auto [ec, buffer_in_size, buffer_out_size] = co_await service.async_buffer_op_coro(false, false, as_tuple);
-    tout(TAG) << "after  calling Ec: " << ec.message() << " buffer_in_size " << buffer_in_size << " Ret2 " << buffer_out_size << std::endl;
+    tout(TAG) << "after  calling Ec: " << ec.message() << " buffer_in_size " << buffer_in_size << " buffer_out_size " << buffer_out_size << std::endl;
   }
 
   co_return 0;
