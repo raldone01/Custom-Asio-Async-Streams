@@ -23,10 +23,6 @@ CPMAddPackage(
 )
 find_package (Threads REQUIRED)
 
-
-
-add_executable(IteratorConcepts "examples/IteratorConcepts.cpp")
-
 function(makeExe target sources)
     add_executable(${target} ${sources})
     target_include_directories(${target} PUBLIC src/)
@@ -39,15 +35,16 @@ function(makeExe target sources)
     endif()
 endfunction()
 
-makeExe(WorkGuards "examples/work_guards.cpp")
-makeExe(CustomAsioReadStream "examples/mainRead.cpp")
-makeExe(CustomAsioWriteStream "examples/mainWrite.cpp")
-makeExe(SimpleAsyncService "examples/simple_async_service.cpp")
-makeExe(CoroContextSwitching "examples/coro_context_switching.cpp")
-makeExe(CoroOutcomeReturn "examples/coro_outcome_return.cpp")
-target_link_libraries(CoroOutcomeReturn PRIVATE Boost::outcome)
-makeExe(AsyncCalls "examples/async_calls.cpp")
-makeExe(CoroAsyncStreams "examples/coro_async_streams.cpp")
+makeExe(CAS_coro_context_switching "examples/coro_context_switching.cpp")
+makeExe(CAS_coro_basic_io_object "examples/coro_basic_io_object.cpp")
+makeExe(CAS_coro_advcd_io_object "examples/coro_advcd_io_object.cpp")
+makeExe(CAS_async_calls "examples/async_calls.cpp")
+makeExe(CAS_work_guards "examples/work_guards.cpp")
+
+makeExe(CAS_coro_outcome_return "examples/coro_outcome_return.cpp")
+target_link_libraries(CAS_coro_outcome_return PRIVATE Boost::outcome)
+
+add_executable(CAS_iterator_concepts "examples/iterator_concepts.cpp")
 
 add_compile_options(--enable-tls --enable-threads) # for thread local storage
 IF(CMAKE_BUILD_TYPE MATCHES DEBUG)
