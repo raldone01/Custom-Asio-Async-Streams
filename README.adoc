@@ -72,11 +72,6 @@ Shows how to return a `boost::outcome` from an `asio::awaitable`.
 Shows how to use the new c++20 iterator concepts defined in the `<iterator>` header.
 
 === TODO
-* CustomStreams: Check if get_associated_executor can be used in the custom streams example
-* CustomStreams: use bind_executor in every post,defer,dispatch statement
-* CustomStreams: add blocking option
-* NewEx: CustomStreams with modern awaitables.
-* Everywhere: Move completion handler before invoking
 * Revisit work_guards - Create a proper work guard example
 * NewEx: Show how to use captured_self to control lifetimes.
 * NewEx: Show how to use and implement cancellation in custom async functions.
