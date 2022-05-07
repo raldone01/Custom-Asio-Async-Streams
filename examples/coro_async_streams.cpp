@@ -20,21 +20,11 @@ You should have received a copy of the GNU General Public License along with thi
 
 namespace asio = boost::asio;
 
-/**
- * Helper that checks if a type is an executor.
- * @tparam T The type to check for executor compatability.
- */
-template <typename T>
-struct is_executor
-  : std::integral_constant<bool,
-    (asio::is_executor<T>::value ||
-     asio::execution::is_executor<T>::value)> {};
-
 template <typename Executor>
-requires is_executor<Executor>::value
+requires my_is_executor<Executor>::value
 class ModernIOService : public std::enable_shared_from_this<ModernIOService<Executor>> {
   template<typename CallerExecutor, typename ModernIOService>
-  requires is_executor<CallerExecutor>::value
+  requires my_is_executor<CallerExecutor>::value
   friend class MyAsyncStream;
   /// Data sent to the service
   std::string buffer_in;
@@ -103,9 +93,12 @@ public:
   }
 };
 
-/// https://www.boost.org/doc/libs/1_66_0/doc/html/boost_asio/reference/AsyncReadStream.html
+/**
+ * In case you just want an AsyncReadStream or an AsyncWriteStream just omit either async_read_some or async_write_some.
+ * https://www.boost.org/doc/libs/1_66_0/doc/html/boost_asio/reference/AsyncReadStream.html
+ */
 template<typename CallerExecutor, typename ModernIOService>
-requires is_executor<CallerExecutor>::value
+requires my_is_executor<CallerExecutor>::value
 class MyAsyncStream {
   typedef void async_rw_handler(boost::system::error_code, size_t);
   /// Holds the io objects bound executor.
@@ -118,9 +111,7 @@ public:
   /// Needed by the stream specification.
   typedef CallerExecutor executor_type;
 
-  /**
-   * @return Returns the executor supplied in the constructor.
-   */
+  /// @return Returns the executor supplied in the constructor.
   auto get_executor() {
     return executor;
   }
@@ -141,7 +132,7 @@ public:
        */
       asio::co_spawn(
           asio::get_associated_executor(completion_handler, this->get_executor()), // Use the executor of the completion_handler for the coroutine but fall back to our bound io executor.
-          [&,
+          [this,
            buffer, // Pass the buffer by value. Cheap because it only points to memory owned by the caller.
            completion_handler = std::forward<CompletionToken>(completion_handler) // always forward the completion_handler
           ]
@@ -194,7 +185,7 @@ public:
       BOOST_ASIO_WRITE_HANDLER_CHECK(CompletionToken, completion_handler) type_check;
       asio::co_spawn(
           asio::get_associated_executor(completion_handler, this->get_executor()),
-          [&,
+          [this,
            buffer,
            completion_handler = std::forward<CompletionToken>(completion_handler)
           ]

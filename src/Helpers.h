@@ -30,4 +30,14 @@ namespace asio = boost::asio;
 
 constexpr auto use_nothrow_awaitable = asio::experimental::as_tuple(asio::use_awaitable);
 
+/**
+ * Helper that checks if a type is an executor.
+ * @tparam T The type to check for executor compatability.
+ */
+template <typename T>
+struct my_is_executor
+  : std::integral_constant<bool,
+    (asio::is_executor<T>::value ||
+     asio::execution::is_executor<T>::value)> {};
+
 #endif //CUSTOMASIOSTREAMS_HELPERS_H

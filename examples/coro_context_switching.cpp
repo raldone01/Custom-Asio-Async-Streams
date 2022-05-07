@@ -41,9 +41,7 @@ asio::awaitable<int> mainCo(auto app_strand, auto srv_strand) {
   co_return 0;
 }
 
-/**
- * What is the difference between executors and execution_contexts?
- */
+ /// What is the difference between executors and execution_contexts?
 int main() {
   /**
    * This is an execution_context.
