@@ -183,7 +183,8 @@ namespace ModernIOService {
       /// Use a weak_ptr to behave like a file descriptor.
       std::weak_ptr<ModernIOServiceImplType> impl_ptr;
     public:
-      explicit MyAsyncStream(std::shared_ptr<ModernIOServiceImplType> &&impl, CallerExecutor &exe) : executor{exe}, impl_ptr{impl} {}
+      explicit MyAsyncStream(std::shared_ptr<ModernIOServiceImplType> &&impl, CallerExecutor &exe) : executor{exe},
+                                                                                                     impl_ptr{impl} {}
 
       /// Needed by the stream specification.
       typedef CallerExecutor executor_type;
@@ -238,7 +239,6 @@ namespace ModernIOService {
               }
               err = asio::stream_errc::eof;
               completion:
-              impl.reset(); // Make sure to disband shared_ptrs to the impl on the correct executor. Otherwise, the destructor of the service might run on the wrong executor.
               co_await asio::post(to_comp); // without this call the function returns on the wrong thread
               tout(TAG) << "read done returned" << std::endl;
               std::move(completion_handler)(err, it);
@@ -254,37 +254,37 @@ namespace ModernIOService {
                             CompletionToken &&token = typename asio::default_completion_token<CallerExecutor>::type()) {
         return asio::async_initiate<CompletionToken, async_rw_handler>([this, buffer](auto completion_handler) {
           auto comp_executor = asio::get_associated_executor(completion_handler, this->get_executor());
-          asio::co_spawn(comp_executor, [this, completion_handler = std::forward<CompletionToken>(completion_handler), buffer]
-              () mutable -> asio::awaitable<void> {
-              const constexpr auto TAG = "AWS";
-            auto comp_executor = co_await asio::this_coro::executor;
-            auto to_comp = asio::bind_executor(comp_executor, asio::use_awaitable);
+          asio::co_spawn(comp_executor,
+                         [this, completion_handler = std::forward<CompletionToken>(completion_handler), buffer]
+                           () mutable -> asio::awaitable<void> {
+                           const constexpr auto TAG = "AWS";
+                           auto comp_executor = co_await asio::this_coro::executor;
+                           auto to_comp = asio::bind_executor(comp_executor, asio::use_awaitable);
 
-            auto impl = this->impl_ptr.lock();
-            if (impl == nullptr) {
-              std::move(completion_handler)(asio::error::bad_descriptor, 0);
-              co_return;
-            }
+                           auto impl = this->impl_ptr.lock();
+                           if (impl == nullptr) {
+                             std::move(completion_handler)(asio::error::bad_descriptor, 0);
+                             co_return;
+                           }
 
-            auto to_impl = asio::bind_executor(impl->strand, asio::use_awaitable);
-            co_await asio::post(to_impl);
-              tout(TAG) << "performing write" << std::endl;
+                           auto to_impl = asio::bind_executor(impl->strand, asio::use_awaitable);
+                           co_await asio::post(to_impl);
+                           tout(TAG) << "performing write" << std::endl;
 
-              auto buf_begin = asio::buffers_begin(buffer);
-              auto buf_end = asio::buffers_end(buffer);
-              boost::system::error_code err = asio::error::fault;
-              size_t it = 0;
-              while (buf_begin != buf_end) {
-                impl->buffer_in.push_back(static_cast<char>(*buf_begin++));
-                it++;
-              }
-              err = asio::stream_errc::eof;
-              completion:
-              impl.reset();
-              co_await asio::post(to_comp);
-              tout(TAG) << "write done returned" << std::endl;
-              std::move(completion_handler)(err, it);
-            }, asio::detached);
+                           auto buf_begin = asio::buffers_begin(buffer);
+                           auto buf_end = asio::buffers_end(buffer);
+                           boost::system::error_code err = asio::error::fault;
+                           size_t it = 0;
+                           while (buf_begin != buf_end) {
+                             impl->buffer_in.push_back(static_cast<char>(*buf_begin++));
+                             it++;
+                           }
+                           err = asio::stream_errc::eof;
+                           completion:
+                           co_await asio::post(to_comp);
+                           tout(TAG) << "write done returned" << std::endl;
+                           std::move(completion_handler)(err, it);
+                         }, asio::detached);
         }, token);
       }
     };
@@ -374,8 +374,6 @@ namespace ModernIOService {
               if (buffer_out_clear)
                 impl->buffer_out = "";
 
-              // impl.reset(); // not necessary here as the scope ends on the correct executor
-
               // std::move(completion_handler)(std::error_code{}, buffer_in_size, buffer_out_size); // ILLEGAL!!! Doing this would leak the service executor to the caller.
               // Don't forget to post back to the original calling executor.
 
@@ -437,7 +435,6 @@ namespace ModernIOService {
               if (buffer_out_clear)
                 impl->buffer_out = "";
 
-              impl.reset();
               co_await asio::post(to_comp);
               std::move(completion_handler)(std::error_code{}, buffer_in_size, buffer_out_size);
             }, asio::detached);
@@ -465,27 +462,25 @@ namespace ModernIOService {
      * @param exe The executor the service should use.
      */
     explicit ModernIOService(ServiceExecutor &&exe) : impl{
-      std::make_shared<ModernIOServiceImplType>(std::forward<ServiceExecutor>(exe))},
-                                                      workGuard{impl->make_destructor_work_guard()} {
+      new ModernIOServiceImplType(std::forward<ServiceExecutor>(exe)), [this](auto *impl) {
+        auto fut = asio::post(workGuard.get_executor(), std::packaged_task<void()>([impl]() {
+          delete impl;
+        }));
+        // fut.wait(); // uncomment this line to make the destructor synchronous
+      }}, workGuard{impl->make_destructor_work_guard()} {
       impl->init();
     }
 
-    ModernIOService(ModernIOService &&) noexcept = default; // change default to delete if you don't want the service to be moveable
+    ModernIOService(
+      ModernIOService &&) noexcept = default; // change default to delete if you don't want the service to be moveable
     ModernIOService &operator=(ModernIOService &&) noexcept = default;
 
     ModernIOService(const ModernIOService &) = delete;
+
     ModernIOService &operator=(ModernIOService const &) = delete;
 
     ~ModernIOService() {
-      if (!impl) // do nothing on move
-        return;
       tout() << "ModernIOService destructor" << std::endl;
-      // ensure the impls destructor is called on the correct strand.
-      auto fut = asio::post(workGuard.get_executor(), std::packaged_task<void()>([impl = std::move(this->impl)]() { // it's important to move the impl here
-          // it's not necessary for this lambda to actually contain any code it's just here to run the destructor of the impl on the correct executor
-        }));
-      // fut.wait(); // uncomment this line to make the destructor synchronous
-      tout() << "ModernIOService destoyed" << std::endl;
     }
 
     /// Creates a ModernIOServiceClient.
