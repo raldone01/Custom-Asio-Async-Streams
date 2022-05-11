@@ -463,7 +463,7 @@ namespace ModernIOService {
      */
     explicit ModernIOService(ServiceExecutor &&exe) : impl{
       new ModernIOServiceImplType(std::forward<ServiceExecutor>(exe)), [this](auto *impl) {
-        auto fut = asio::post(workGuard.get_executor(), std::packaged_task<void()>([impl]() {
+        auto fut = asio::post(workGuard.get_executor(), std::packaged_task<void()>([impl]() { // ensure that the destructor is run on the correct executor
           delete impl;
         }));
         // fut.wait(); // uncomment this line to make the destructor synchronous
@@ -545,7 +545,7 @@ asio::awaitable<int> mainCo(T &srv_ctx) {
   }
 
   {
-    // auto service2 = std::move(service); // uncomment this line to see what happens when the service is owner is destroyed
+    // auto service2 = std::move(service); // uncomment this line to see what happens when the service owner is destroyed
   }
 
   // async_buffer_op_initiate
