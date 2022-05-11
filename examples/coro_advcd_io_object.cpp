@@ -238,6 +238,7 @@ namespace ModernIOService {
               }
               err = asio::stream_errc::eof;
               completion:
+              impl.reset(); // Make sure to disband shared_ptrs to the impl on the correct executor. Otherwise, the destructor of the service might run on the wrong executor.
               co_await asio::post(to_comp); // without this call the function returns on the wrong thread
               tout(TAG) << "read done returned" << std::endl;
               std::move(completion_handler)(err, it);
@@ -279,6 +280,7 @@ namespace ModernIOService {
               }
               err = asio::stream_errc::eof;
               completion:
+              impl.reset();
               co_await asio::post(to_comp);
               tout(TAG) << "write done returned" << std::endl;
               std::move(completion_handler)(err, it);
@@ -372,6 +374,8 @@ namespace ModernIOService {
               if (buffer_out_clear)
                 impl->buffer_out = "";
 
+              // impl.reset(); // not necessary here as the scope ends on the correct executor
+
               // std::move(completion_handler)(std::error_code{}, buffer_in_size, buffer_out_size); // ILLEGAL!!! Doing this would leak the service executor to the caller.
               // Don't forget to post back to the original calling executor.
 
@@ -433,6 +437,7 @@ namespace ModernIOService {
               if (buffer_out_clear)
                 impl->buffer_out = "";
 
+              impl.reset();
               co_await asio::post(to_comp);
               std::move(completion_handler)(std::error_code{}, buffer_in_size, buffer_out_size);
             }, asio::detached);
