@@ -181,11 +181,9 @@ namespace ModernIOService {
       /// Holds the io objects bound executor.
       CallerExecutor executor;
       /// Use a weak_ptr to behave like a file descriptor.
-      std::weak_ptr<ModernIOServiceImplType> service_ptr;
+      std::weak_ptr<ModernIOServiceImplType> impl_ptr;
     public:
-      explicit MyAsyncStream(std::shared_ptr<ModernIOServiceImplType> &service, CallerExecutor &exe) : executor{exe},
-                                                                                                       service_ptr{
-                                                                                                         service} {}
+      explicit MyAsyncStream(std::shared_ptr<ModernIOServiceImplType> &&impl, CallerExecutor &exe) : executor{exe}, impl_ptr{impl} {}
 
       /// Needed by the stream specification.
       typedef CallerExecutor executor_type;
@@ -205,7 +203,6 @@ namespace ModernIOService {
                            CompletionToken &&token = typename asio::default_completion_token<CallerExecutor>::type()) {
         return asio::async_initiate<CompletionToken, async_rw_handler>(
           [this, buffer](auto completion_handler) mutable { // TODO: check mutables
-            BOOST_ASIO_WRITE_HANDLER_CHECK(CompletionToken, completion_handler) type_check;
             auto comp_executor = asio::get_associated_executor(completion_handler, this->get_executor());
             asio::co_spawn(comp_executor, [this, completion_handler = std::move(
               completion_handler), // TODO: completion_handler = std::forward<CompletionToken>(completion_handler)
@@ -256,7 +253,6 @@ namespace ModernIOService {
       auto async_write_some(const ConstBufferSequence &buffer,
                             CompletionToken &&token = typename asio::default_completion_token<CallerExecutor>::type()) {
         return asio::async_initiate<CompletionToken, async_rw_handler>([this, buffer](auto completion_handler) mutable {
-          BOOST_ASIO_WRITE_HANDLER_CHECK(CompletionToken, completion_handler) type_check;
           auto comp_executor = asio::get_associated_executor(completion_handler, this->get_executor());
           asio::co_spawn(comp_executor, [this, completion_handler = std::move(completion_handler), buffer]
               () mutable -> asio::awaitable<void> {
@@ -312,7 +308,7 @@ namespace ModernIOService {
 
       /// Creates a MyAsyncStream instance.
       MyAsyncStream<CallerExecutor, ModernIOServiceImplType> make_my_async_stream() {
-        return MyAsyncStream(impl_ptr.lock(), executor);
+        return MyAsyncStream<CallerExecutor, ModernIOServiceImplType>(impl_ptr.lock(), executor);
       }
 
       // region direct async functions
@@ -338,13 +334,12 @@ namespace ModernIOService {
        * This function shows how to implement a async function with a completion token using `asio::async_initiate`.
        * This is useful if coroutines aren't available or to reduce overhead.
        */
-      template<asio::completion_token_for<typename ModernIOServiceImplType::async_return_function> CompletionToken = typename asio::default_completion_token<CallerExecutor>::type>
+      template<asio::completion_token_for<async_return_function> CompletionToken = typename asio::default_completion_token<CallerExecutor>::type>
       auto async_buffer_op_initiate(bool buffer_in_clear, bool buffer_out_clear,
                                     CompletionToken &&token = typename asio::default_completion_token<CallerExecutor>::type()) {
         return asio::async_initiate<CompletionToken, async_return_function>(
           [this, buffer_in_clear, buffer_out_clear] // It is imperative to capture any parameters BY VALUE or to forward/move them.
             (auto completion_handler) mutable {
-            BOOST_ASIO_WRITE_HANDLER_CHECK(CompletionToken, completion_handler) type_check;
             const constexpr auto TAG = "async_buffer_op_initiate_function";
             // This gets the executor that asio has already conveniently associated with the completion handler and falls back to our bound executor.
             auto comp_executor = asio::get_associated_executor(completion_handler, this->get_executor());
@@ -357,7 +352,7 @@ namespace ModernIOService {
               //       For this reason we have to post to the assoc_executor before invocation.
               asio::post(comp_executor, [completion_handler = std::move(completion_handler)]() mutable {
                 std::move(completion_handler)(asio::error::bad_descriptor,
-                                              0); // always move the completion_handler into the 'call'
+                                              0, 0); // always move the completion_handler into the 'call'
               });
               return;
             }
@@ -405,13 +400,12 @@ namespace ModernIOService {
        *       The `async_buffer_op_coro` function would still contain the `co_spawn` call but inside the coroutine it would simply `co_await async_buffer_op_coro_awaitable(...params, as_tuple)`.
        *       And then call the completion handler with the results.
        */
-      template<asio::completion_token_for<typename ModernIOServiceImplType::async_return_function> CompletionToken = typename asio::default_completion_token<CallerExecutor>::type>
+      template<asio::completion_token_for<async_return_function> CompletionToken = typename asio::default_completion_token<CallerExecutor>::type>
       auto async_buffer_op_coro(bool buffer_in_clear, bool buffer_out_clear,
                                 CompletionToken &&token = typename asio::default_completion_token<CallerExecutor>::type()) {
         return asio::async_initiate<CompletionToken, async_return_function>(
           [this, buffer_in_clear, buffer_out_clear] // It is imperative to capture any parameters BY VALUE or to forward/move them.
             (auto completion_handler) mutable {
-            BOOST_ASIO_WRITE_HANDLER_CHECK(CompletionToken, completion_handler) type_check;
             const constexpr auto TAG = "async_buffer_op_coro_function";
 
             // Starting the coroutine directly on the target executor removes the need for a work guard.
@@ -551,7 +545,7 @@ asio::awaitable<int> mainCo(T &srv_ctx) {
   }
 
   {
-    auto service2 = std::move(service); // uncomment this line to see what happens when the service is owner is destroyed
+    // auto service2 = std::move(service); // uncomment this line to see what happens when the service is owner is destroyed
   }
 
   //async_initiate_function
