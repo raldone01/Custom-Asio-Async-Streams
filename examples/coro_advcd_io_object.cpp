@@ -6,6 +6,8 @@ You should have received a copy of the GNU General Public License along with thi
 
 /**
  * TODO: add default_completion_token
+ * TODO: move direct functions to their own io object currently there a lifetime issues with destruction
+ *       Currently it would be necessary for direct functions to capture self.
  */
 
 #include "Helpers.h"
@@ -186,7 +188,7 @@ namespace ModernIOService {
           [this, buffer_in_clear, buffer_out_clear] // It is imperative to capture any parameters BY VALUE or to forward/move them.
             (auto completion_handler) mutable {
             const constexpr auto TAG = "async_initiate_function";
-            asio::co_spawn(strand,
+            asio::co_spawn(strand, // NOTE: We don't need a work guard here because
                            [this, &TAG, buffer_in_clear, buffer_out_clear,
                             completion_handler = std::move(completion_handler)]() mutable -> asio::awaitable<void> {
               // this gets the executor that asio has already conveniently associated with the completion handler.
@@ -211,16 +213,16 @@ namespace ModernIOService {
      * In case you just want an AsyncReadStream or an AsyncWriteStream just omit either async_read_some or async_write_some.
      * https://www.boost.org/doc/libs/1_66_0/doc/html/boost_asio/reference/AsyncReadStream.html
      */
-    template<typename CallerExecutor, typename ModernIOService>
+    template<typename CallerExecutor, typename ModernIOServiceImplType>
     requires my_is_executor<CallerExecutor>::value
     class MyAsyncStream {
       typedef void async_rw_handler(boost::system::error_code, size_t);
       /// Holds the io objects bound executor.
       CallerExecutor executor;
       /// Use a weak_ptr to behave like a file descriptor.
-      std::weak_ptr<ModernIOService> service_ptr;
+      std::weak_ptr<ModernIOServiceImplType> service_ptr;
     public:
-      explicit MyAsyncStream(std::shared_ptr<ModernIOService> & service, CallerExecutor & exe) : executor{exe}, service_ptr{service} {}
+      explicit MyAsyncStream(std::shared_ptr<ModernIOServiceImplType> & service, CallerExecutor & exe) : executor{exe}, service_ptr{service} {}
 
       /// Needed by the stream specification.
       typedef CallerExecutor executor_type;
@@ -333,6 +335,38 @@ namespace ModernIOService {
             }, asio::detached);
         }, token);
       }
+
+      // region direct async functions as members of the stream
+      template<asio::completion_token_for<typename ModernIOServiceImplType::async_return_function> CompletionToken = typename asio::default_completion_token<CallerExecutor>::type>
+      auto async_buffer_op_initiate(bool buffer_in_clear, bool buffer_out_clear,
+                                    CompletionToken &&token = typename asio::default_completion_token<CallerExecutor>::type()) {
+        auto service = service_ptr.lock();
+        if (!service)
+          return asio::async_initiate<CompletionToken, typename ModernIOServiceImplType::async_return_function>(
+              [this] (auto completion_handler) mutable {
+                asio::post(asio::get_associated_executor(completion_handler, this->get_executor()), [completion_handler = std::move(completion_handler)]() mutable {
+                  completion_handler(boost::system::error_code{asio::error::bad_descriptor}, 0, 0);
+                });
+              },
+              token);
+        return service->async_buffer_op_initiate(buffer_in_clear, buffer_out_clear, std::forward<CompletionToken>(token));
+      }
+
+      template<asio::completion_token_for<typename ModernIOServiceImplType::async_return_function> CompletionToken = typename asio::default_completion_token<CallerExecutor>::type>
+      auto async_buffer_op_coro(bool buffer_in_clear, bool buffer_out_clear,
+                                CompletionToken &&token = typename asio::default_completion_token<CallerExecutor>::type()) {
+        auto service = service_ptr.lock();
+        if (!service)
+          return asio::async_initiate<CompletionToken, typename ModernIOServiceImplType::async_return_function>(
+              [this] (auto completion_handler) mutable {
+                asio::post(asio::get_associated_executor(completion_handler, this->get_executor()), [completion_handler = std::move(completion_handler)]() mutable {
+                  completion_handler(boost::system::error_code{asio::error::bad_descriptor}, 0, 0);
+                });
+              },
+              token);
+        return service->async_buffer_op_coro(buffer_in_clear, buffer_out_clear, std::forward<CompletionToken>(token));
+      }
+      // endregion
     };
   }
 
@@ -388,6 +422,7 @@ namespace ModernIOService {
     /*
      * The functions in this region forward the users calls to the underlying impl.
      * They are necessary to expose the public impl functions.
+     * Note: Unlike the direct async functions inside the AsyncStream these declarations have no default completion token because there is no default/bound executor.
      */
 
     template<asio::completion_token_for<typename ModernIOServiceImplType::async_return_function> CompletionToken>
@@ -460,15 +495,32 @@ asio::awaitable<int> mainCo(T & srv_ctx) {
 
   // auto service2 = std::move(service);  // uncomment this line to see how important the asserts are
                                           // also uncomment the assert to see how 'helpful' the error is without it
+
+  {
+    auto service3 = std::move(service);
+  }
+
   //async_initiate_function
   {
-    tout(TAG) << "before calling" << std::endl;
+    tout(TAG) << "before calling (with io object init)" << std::endl;
+    auto [ec, buffer_in_size, buffer_out_size] = co_await stream.async_buffer_op_initiate(false, false, as_tuple);
+    tout(TAG) << "after  calling Ec: " << ec.message() << " buffer_in_size " << buffer_in_size << " buffer_out_size " << buffer_out_size << std::endl;
+  }
+  {
+    tout(TAG) << "before calling (with io object coro)" << std::endl;
+    auto [ec, buffer_in_size, buffer_out_size] = co_await stream.async_buffer_op_coro(false, false, as_tuple);
+    tout(TAG) << "after  calling Ec: " << ec.message() << " buffer_in_size " << buffer_in_size << " buffer_out_size " << buffer_out_size << std::endl;
+  }
+
+  //async_initiate_function
+  {
+    tout(TAG) << "before calling (directly init)" << std::endl;
     auto [ec, buffer_in_size, buffer_out_size] = co_await service.async_buffer_op_initiate(false, false, as_tuple);
     tout(TAG) << "after  calling Ec: " << ec.message() << " buffer_in_size " << buffer_in_size << " buffer_out_size " << buffer_out_size << std::endl;
   }
   //async_coro_function
   {
-    tout(TAG) << "before calling" << std::endl;
+    tout(TAG) << "before calling (directly coro)" << std::endl;
     auto [ec, buffer_in_size, buffer_out_size] = co_await service.async_buffer_op_coro(false, false, as_tuple);
     tout(TAG) << "after  calling Ec: " << ec.message() << " buffer_in_size " << buffer_in_size << " buffer_out_size " << buffer_out_size << std::endl;
   }
