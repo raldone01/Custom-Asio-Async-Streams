@@ -49,9 +49,8 @@ Builds on the foundation of the `CAS_coro_basic_io_object` example.
 * The MyAsyncStream forward declaration is removed.
 * The Service `shared_ptr` is hidden from the user.
 * The Service init call is hidden from the user.
-* Adds two direct async functions which can be called directly without the need for an IO object.
+* Adds two direct async functions.
   This is useful when using streams is overkill and all data is available instantly.
-  However, with little effort these direct async functions can be added to the IO object instead.
 
 === CAS_async_calls
 
