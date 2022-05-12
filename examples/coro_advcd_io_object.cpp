@@ -143,7 +143,7 @@ namespace ModernIOService {
        * Note: The constructor of the service is called from a foreign executor!
        *       When you want to init executor specific things do it in the init function.
        */
-      explicit ModernIOServiceImpl(Executor &&exe) : strand{asio::make_strand(exe)}, timer{exe.context()} {}
+      explicit ModernIOServiceImpl(Executor &&exe) : strand{exe}, timer{exe.context()} {}
 
       /**
        * This function is called by the wrapper from a foreign executor!
@@ -476,7 +476,6 @@ namespace ModernIOService {
     ModernIOService &operator=(ModernIOService &&) noexcept = default;
 
     ModernIOService(const ModernIOService &) = delete;
-
     ModernIOService &operator=(ModernIOService const &) = delete;
 
     ~ModernIOService() {
@@ -496,8 +495,7 @@ namespace ModernIOService {
  * This is the actual main application loop.
  * It uses a new c++20 coroutine.
  */
-template<typename T>
-asio::awaitable<int> mainCo(T &srv_ctx) {
+asio::awaitable<int> mainCo(auto &srv_ctx) {
   const constexpr auto TAG = "MC";
   auto exe = co_await asio::this_coro::executor;
   auto timer = asio::steady_timer(exe);

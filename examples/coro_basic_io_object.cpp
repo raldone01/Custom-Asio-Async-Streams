@@ -84,7 +84,7 @@ class ModernIOService : public std::enable_shared_from_this<ModernIOService<Exec
 
 public:
 
-  explicit ModernIOService(Executor && exe) : strand{asio::make_strand(exe)}, timer{exe.context()} {}
+  explicit ModernIOService(Executor && exe) : strand{exe}, timer{exe.context()} {}
 
   void init() {
     std::call_once(init_once, [this]() {
